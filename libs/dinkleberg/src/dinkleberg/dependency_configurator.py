@@ -151,6 +151,16 @@ class DependencyConfigurator(DependencyScope):
         else:
             instance = factory(**deps, **kwargs)
 
+        if isinstance(instance, AsyncGenerator):
+            try:
+                if is_generator:
+                    raise RuntimeError(f'Generator {t} yielded another generator. Nested generators are not supported.')
+                else:
+                    raise RuntimeError(
+                        f'Callable {t} returned a generator. This is most likely due to an invalid dependency registration.')
+            finally:
+                await instance.aclose()
+
         self._wrap_instance(instance)
 
         if lifetime == 'singleton':

@@ -7,6 +7,7 @@ import pytest
 async def test_resolve_abc(di):
     with pytest.raises(ValueError) as exc_info:
         instance = await di.resolve(ABC)
+
     assert f'Cannot resolve abstract class {ABC} without explicit registration.' in str(exc_info.value)
 
 
@@ -19,6 +20,7 @@ async def test_resolve_abc_class(di):
 
     with pytest.raises(ValueError) as exc_info:
         instance = await di.resolve(AbstractClass)
+
     assert f'Cannot resolve abstract class {AbstractClass} without explicit registration.' in str(exc_info.value)
 
 
@@ -40,6 +42,7 @@ async def test_resolve_abcmeta_class(di):
 
     with pytest.raises(ValueError) as exc_info:
         instance = await di.resolve(AbstractMetaClass)
+
     assert f'Cannot resolve abstract class {AbstractMetaClass} without explicit registration.' in str(exc_info.value)
 
 
