@@ -4,7 +4,24 @@ version = "0.1.0"
 description = "Your friendly neighbour when it comes to dependency management."
 requires-python = ">=3.13"
 readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["dependency", "package-management", "automation"]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/DavidVollmers/dinkleberg"
+Documentation = "https://github.com/DavidVollmers/dinkleberg/blob/main/libs/dinkleberg/README.md"
+Repository = "https://github.com/DavidVollmers/dinkleberg.git"
+Issues = "https://github.com/DavidVollmers/dinkleberg/issues"
+Changelog = "https://github.com/DavidVollmers/dinkleberg/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

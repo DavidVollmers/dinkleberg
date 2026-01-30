@@ -10,6 +10,12 @@
       "options": {
         "cwd": "libs/dinkleberg"
       }
+    },
+    "publish": {
+      "command": "uv publish ../../dist/dinkleberg*.whl",
+      "options": {
+        "cwd": "libs/dinkleberg"
+      }
     }
   }
 }
