@@ -30,27 +30,3 @@ async def test_resolve_transient_callable(di):
     assert isinstance(instance2, TestClass)
 
     assert instance1 is not instance2
-
-
-@pytest.mark.asyncio
-async def test_resolve_transient_generator(di):
-    close_counter = 0
-
-    async def generator():
-        yield TestClass()
-        nonlocal close_counter
-        close_counter += 1
-
-    di.add_transient(t=TestClass, generator=generator)
-
-    instance1 = await di.resolve(TestClass)
-    assert isinstance(instance1, TestClass)
-
-    instance2 = await di.resolve(TestClass)
-    assert isinstance(instance2, TestClass)
-
-    assert instance1 is not instance2
-
-    await di.close()
-
-    assert close_counter == 2

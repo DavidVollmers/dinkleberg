@@ -104,6 +104,7 @@ class DependencyConfigurator(DependencyScope):
         return None
 
     # TODO circular dependency detection
+    # TODO singleton race condition prevention (async.Lock)
     async def resolve[T](self, t: type[T], **kwargs) -> T:
         self._raise_if_closed()
 
@@ -308,15 +309,6 @@ class DependencyConfigurator(DependencyScope):
     def add_transient[T, I](self, *, t: type[T], callable: Callable[..., I]):
         ...
 
-    @overload
-    def add_transient[I](self, *, generator: Callable[..., AsyncGenerator[I]]):
-        ...
-
-    @overload
-    def add_transient[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
-        ...
-
-    def add_transient[T, I](self, *, t: type[T] = None, generator: Callable[..., AsyncGenerator[I]] = None,
-                            callable: Callable[..., I] = None):
+    def add_transient[T, I](self, *, t: type[T] = None, callable: Callable[..., I] = None):
         self._raise_if_closed()
-        self._add('transient', t=t, generator=generator, callable=callable)
+        self._add('transient', t=t, callable=callable)
