@@ -1,0 +1,8 @@
+.gitignore
+.prettierignore
+*.iml
+*.xml
+*.toml
+*.lock
+.gitkeep
+*.py
