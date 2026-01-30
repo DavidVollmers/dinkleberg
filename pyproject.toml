@@ -1,6 +1,19 @@
 [project]
 name = "dinkleberg-neighbourhood"
 version = "0.0.0"
-classifiers = ["Private :: Do Not Upload"]
+classifiers = [ "Private :: Do Not Upload" ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [ "dinkleberg" ]
+
+[tool.uv.workspace]
+members = [ "libs/dinkleberg" ]
+
+[tool.uv.sources.dinkleberg]
+workspace = true
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "pytest>=9.0.2",
+]
+
