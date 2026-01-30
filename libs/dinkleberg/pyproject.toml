@@ -1,6 +1,11 @@
 [project]
 name = "dinkleberg"
-version = "0.0.0"
+version = "0.1.0"
 description = "Your friendly neighbour when it comes to dependency management."
 requires-python = ">=3.13"
+readme = "README.md"
 dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
