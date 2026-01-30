@@ -1,1 +1,10 @@
 node_modules
+
+
+
+.nx/cache
+.nx/workspace-data
+
+.venv
+__pycache__
+*.egg-info

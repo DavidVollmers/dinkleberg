@@ -1,5 +1,5 @@
 {
-  "name": "dinkleberg-workspace",
+  "name": "dinkleberg-neighbourhood",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,11 +9,14 @@
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",
     "@commitlint/config-conventional": "^20.4.0",
+    "@dev-tales/nx-python": "^0.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "nx": "22.4.3",
     "prettier": "^3.8.1"
   },
   "lint-staged": {
     "*.*": "prettier --write"
-  }
+  },
+  "nx": {}
 }
