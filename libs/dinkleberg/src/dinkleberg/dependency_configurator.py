@@ -61,7 +61,7 @@ class DependencyConfigurator(DependencyScope):
     def _add(self, lifetime: Lifetime, *, t: type = None, generator: Callable[..., AsyncGenerator] = None,
              callable: Callable = None):
         if generator is None and callable is None:
-            raise ValueError('Invalid dependency configuration.')
+            raise ValueError('Invalid dependency registration. Either generator or callable must be provided.')
         if t is None:
             t = self._infer_type(generator=generator, callable=callable)
         self._descriptors[t] = Descriptor(generator=generator, callable=callable, lifetime=lifetime)
@@ -146,6 +146,8 @@ class DependencyConfigurator(DependencyScope):
                 raise RuntimeError(f'Generator {t} did not yield any value.')
 
             self._active_generators.append(generator)
+        elif asyncio.iscoroutinefunction(factory):
+            instance = await factory(**deps, **kwargs)
         else:
             instance = factory(**deps, **kwargs)
 
@@ -287,3 +289,24 @@ class DependencyConfigurator(DependencyScope):
                          callable: Callable[..., I] = None):
         self._raise_if_closed()
         self._add('scoped', t=t, generator=generator, callable=callable)
+
+    @overload
+    def add_transient[I](self, *, callable: Callable[..., I]):
+        ...
+
+    @overload
+    def add_transient[T, I](self, *, t: type[T], callable: Callable[..., I]):
+        ...
+
+    @overload
+    def add_transient[I](self, *, generator: Callable[..., AsyncGenerator[I]]):
+        ...
+
+    @overload
+    def add_transient[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
+        ...
+
+    def add_transient[T, I](self, *, t: type[T] = None, generator: Callable[..., AsyncGenerator[I]] = None,
+                            callable: Callable[..., I] = None):
+        self._raise_if_closed()
+        self._add('transient', t=t, generator=generator, callable=callable)
