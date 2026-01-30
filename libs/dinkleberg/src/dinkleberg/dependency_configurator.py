@@ -1,3 +1,4 @@
+import abc
 import asyncio
 import inspect
 import logging
@@ -126,9 +127,11 @@ class DependencyConfigurator(DependencyScope):
             factory = descriptor['generator'] or descriptor['callable']
             deps = await self._resolve_deps(factory)
         else:
-            origin = get_origin(t)
-            if origin is not None:
+            if get_origin(t) is not None:
                 raise ValueError(f'Cannot resolve generic type {t} without explicit registration.')
+
+            if inspect.isabstract(t) or t is abc.ABC:
+                raise ValueError(f'Cannot resolve abstract class {t} without explicit registration.')
 
             is_generator = False
             lifetime = 'transient'
