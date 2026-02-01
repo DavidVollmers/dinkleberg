@@ -1,4 +1,7 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
-  "plugins": ["@dev-tales/nx-python"]
+  "plugins": ["@dev-tales/nx-python"],
+  "release": {
+    "projects": ["dinkleberg"]
+  }
 }

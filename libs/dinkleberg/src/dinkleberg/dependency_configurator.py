@@ -9,7 +9,7 @@ from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, 
 from .dependency import Dependency
 from .dependency_scope import DependencyScope
 from .descriptor import Descriptor, Lifetime
-from .typing import get_static_params, get_public_methods
+from .typing import get_static_params, get_public_methods, is_builtin
 
 logger = logging.getLogger(__name__)
 
@@ -180,8 +180,10 @@ class DependencyConfigurator(DependencyScope):
             if not param.annotation or param.annotation is inspect.Parameter.empty:
                 continue
 
+            if is_builtin(param.annotation):
+                continue
+
             # TODO handle more complex cases (e.g., Union, Optional, etc.)
-            # TODO handle native types (int, str, etc.)
             names.append(param.name)
             tasks.append(self.resolve(param.annotation))
 
@@ -212,7 +214,7 @@ class DependencyConfigurator(DependencyScope):
 
     # TODO handle __slots__
     def _wrap_instance(self, instance):
-        if getattr(instance, '__di_wrapped__', False):
+        if getattr(instance, '__dinkleberg__', False):
             return
 
         methods = get_public_methods(instance)
@@ -238,7 +240,7 @@ class DependencyConfigurator(DependencyScope):
                 raise NotImplementedError('Synchronous methods with Dependency() defaults are not supported.')
 
         try:
-            setattr(instance, '__di_wrapped__', True)
+            setattr(instance, '__dinkleberg__', True)
         except (AttributeError, TypeError):
             # Some objects (like those with __slots__) might not allow new attributes
             pass
