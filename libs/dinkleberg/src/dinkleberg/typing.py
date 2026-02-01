@@ -3,9 +3,9 @@ from inspect import Parameter, signature
 from typing import Callable, get_origin
 
 
-def is_builtin(t: type) -> bool:
+def is_builtin_type(t: type) -> bool:
     origin = get_origin(t) or t
-    return getattr(origin, '__module__', None) == 'builtins'
+    return getattr(origin, '__module__', None) in ('builtins', 'typing', 'types')
 
 
 def get_static_params(func: Callable) -> list[Parameter]:

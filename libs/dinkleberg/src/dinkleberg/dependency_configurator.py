@@ -9,7 +9,7 @@ from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, 
 from .dependency import Dependency
 from .dependency_scope import DependencyScope
 from .descriptor import Descriptor, Lifetime
-from .typing import get_static_params, get_public_methods, is_builtin
+from .typing import get_static_params, get_public_methods, is_builtin_type
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,9 @@ class DependencyConfigurator(DependencyScope):
             factory = descriptor['generator'] or descriptor['callable']
             deps = await self._resolve_deps(factory)
         else:
+            if is_builtin_type(t):
+                raise ValueError(f'Cannot resolve built-in type {t} without explicit registration.')
+
             if get_origin(t) is not None:
                 raise ValueError(f'Cannot resolve generic type {t} without explicit registration.')
 
@@ -180,7 +183,7 @@ class DependencyConfigurator(DependencyScope):
             if not param.annotation or param.annotation is inspect.Parameter.empty:
                 continue
 
-            if is_builtin(param.annotation):
+            if is_builtin_type(param.annotation):
                 continue
 
             # TODO handle more complex cases (e.g., Union, Optional, etc.)
