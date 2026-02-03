@@ -1,0 +1,9 @@
+[project]
+name = "fastapi-example"
+version = "0.0.0"
+description = "My awesome Python library"
+classifiers = ["Private :: Do Not Upload"]
+requires-python = ">=3.13"
+dependencies = [
+    "dinkleberg[fastapi]>=0.3.0",
+]

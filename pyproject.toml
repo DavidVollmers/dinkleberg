@@ -3,10 +3,10 @@ name = "dinkleberg-neighbourhood"
 version = "0.0.0"
 classifiers = [ "Private :: Do Not Upload" ]
 requires-python = ">=3.13"
-dependencies = [ "dinkleberg", "dinkleberg-abc", "dinkleberg-fastapi" ]
+dependencies = [ "dinkleberg", "dinkleberg-abc", "dinkleberg-fastapi", "fastapi-example" ]
 
 [tool.uv.workspace]
-members = [ "libs/dinkleberg", "libs/dinkleberg-abc", "libs/dinkleberg-fastapi" ]
+members = [ "libs/dinkleberg", "libs/dinkleberg-abc", "libs/dinkleberg-fastapi", "examples/fastapi" ]
 
 [tool.uv.sources.dinkleberg]
 workspace = true
@@ -15,6 +15,9 @@ workspace = true
 workspace = true
 
 [tool.uv.sources.dinkleberg-fastapi]
+workspace = true
+
+[tool.uv.sources.fastapi-example]
 workspace = true
 
 [dependency-groups]
