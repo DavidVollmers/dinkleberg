@@ -61,6 +61,11 @@ class DependencyConfigurator(DependencyScope):
         if t is None and i is None and generator is None and callable is None:
             raise ValueError(
                 'Invalid dependency registration. At least one of t, i, generator, or callable must be provided.')
+
+        if lifetime == 'singleton' and self._parent is not None:
+            raise RuntimeError(
+                'Singleton dependencies, which are not instances, can only be registered in the root DependencyConfigurator.')
+
         if i is not None:
             if is_builtin_type(i):
                 raise ValueError(f'Cannot use built-in type {i} as implementation.')
@@ -70,6 +75,7 @@ class DependencyConfigurator(DependencyScope):
 
             if is_abstract(i):
                 raise ValueError(f'Cannot use abstract class {i} as implementation.')
+
         if t is None:
             if i is not None:
                 t = i
@@ -87,6 +93,7 @@ class DependencyConfigurator(DependencyScope):
             if is_abstract(t):
                 raise ValueError(
                     f'Cannot register abstract class {t} without explicit implementation, generator or callable.')
+
         self._descriptors[t] = Descriptor(implementation=i, generator=generator, callable=callable, lifetime=lifetime)
 
     @staticmethod
@@ -141,7 +148,7 @@ class DependencyConfigurator(DependencyScope):
             return self._scoped_instances[t]
 
         descriptor = self._descriptors.get(t)
-        if descriptor is None or descriptor['implementation'] is not None:
+        if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
             if descriptor is None:
                 if is_builtin_type(t):
                     raise ValueError(f'Cannot resolve built-in type {t} without explicit registration.')
@@ -160,7 +167,6 @@ class DependencyConfigurator(DependencyScope):
             lifetime = descriptor['lifetime'] if descriptor else 'transient'
             deps = await self._resolve_deps(factory.__init__)
         else:
-            descriptor = self._descriptors[t]
             lifetime = descriptor['lifetime']
             if lifetime == 'singleton' and self._parent:
                 # we need to resolve singleton from the root scope
@@ -316,9 +322,6 @@ class DependencyConfigurator(DependencyScope):
                             generator: Callable[..., AsyncGenerator[I]] = None,
                             callable: Callable[..., I] = None, instance: I = None):
         self._raise_if_closed()
-        if self._parent is not None:
-            raise RuntimeError(
-                'Cannot add singleton to a scoped DependencyConfigurator. Add it to the root DependencyConfigurator.')
 
         if instance is None:
             self._add('singleton', t=t, i=i, generator=generator, callable=callable)
