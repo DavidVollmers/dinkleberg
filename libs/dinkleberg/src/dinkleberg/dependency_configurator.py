@@ -6,8 +6,7 @@ from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin
 
-from .dependency import Dependency
-from .dependency_scope import DependencyScope
+from dinkleberg_abc import DependencyScope, Dependency
 from .descriptor import Descriptor, Lifetime
 from .typing import get_static_params, get_public_methods, is_builtin_type
 
@@ -58,13 +57,17 @@ class DependencyConfigurator(DependencyScope):
         if exceptions:
             raise ExceptionGroup('Errors occurred during closing DependencyConfigurator', exceptions)
 
-    def _add(self, lifetime: Lifetime, *, t: type = None, generator: Callable[..., AsyncGenerator] = None,
-             callable: Callable = None):
-        if generator is None and callable is None:
-            raise ValueError('Invalid dependency registration. Either generator or callable must be provided.')
+    def _add(self, lifetime: Lifetime, *, t: type = None, i: type = None,
+             generator: Callable[..., AsyncGenerator] = None, callable: Callable = None):
+        if t is None and i is None and generator is None and callable is None:
+            raise ValueError(
+                'Invalid dependency registration. At least one of t, i, generator, or callable must be provided.')
         if t is None:
-            t = self._infer_type(generator=generator, callable=callable)
-        self._descriptors[t] = Descriptor(generator=generator, callable=callable, lifetime=lifetime)
+            if i is not None:
+                t = i
+            else:
+                t = self._infer_type(generator=generator, callable=callable)
+        self._descriptors[t] = Descriptor(implementation=i, generator=generator, callable=callable, lifetime=lifetime)
 
     @staticmethod
     def _infer_type(*, generator: Callable[..., AsyncGenerator], callable: Callable) -> type:
@@ -257,6 +260,18 @@ class DependencyConfigurator(DependencyScope):
         ...
 
     @overload
+    def add_singleton[T](self, *, t: type[T]):
+        ...
+
+    @overload
+    def add_singleton[I](self, *, i: type[I]):
+        ...
+
+    @overload
+    def add_singleton[T, I](self, *, t: type[T], i: type[I]):
+        ...
+
+    @overload
     def add_singleton[I](self, *, callable: Callable[..., I]):
         ...
 
@@ -272,11 +287,12 @@ class DependencyConfigurator(DependencyScope):
     def add_singleton[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
         ...
 
-    def add_singleton[T, I](self, *, t: type[T] = None, generator: Callable[..., AsyncGenerator[I]] = None,
+    def add_singleton[T, I](self, *, t: type[T] = None, i: type[I] = None,
+                            generator: Callable[..., AsyncGenerator[I]] = None,
                             callable: Callable[..., I] = None, instance: I = None):
         self._raise_if_closed()
         if instance is None:
-            self._add('singleton', t=t, generator=generator, callable=callable)
+            self._add('singleton', t=t, i=i, generator=generator, callable=callable)
             return
         elif t is None:
             t = type(instance)
@@ -284,6 +300,18 @@ class DependencyConfigurator(DependencyScope):
         self._wrap_instance(instance)
 
         self._singleton_instances[t] = instance
+
+    @overload
+    def add_scoped[T](self, *, t: type[T]):
+        ...
+
+    @overload
+    def add_scoped[I](self, *, i: type[I]):
+        ...
+
+    @overload
+    def add_scoped[T, I](self, *, t: type[T], i: type[I]):
+        ...
 
     @overload
     def add_scoped[I](self, *, callable: Callable[..., I]):
@@ -301,10 +329,22 @@ class DependencyConfigurator(DependencyScope):
     def add_scoped[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
         ...
 
-    def add_scoped[T, I](self, *, t: type[T] = None, generator: Callable[..., AsyncGenerator[I]] = None,
-                         callable: Callable[..., I] = None):
+    def add_scoped[T, I](self, *, t: type[T] = None, i: type[I] = None,
+                         generator: Callable[..., AsyncGenerator[I]] = None, callable: Callable[..., I] = None):
         self._raise_if_closed()
-        self._add('scoped', t=t, generator=generator, callable=callable)
+        self._add('scoped', t=t, i=i, generator=generator, callable=callable)
+
+    @overload
+    def add_transient[T](self, *, t: type[T]):
+        ...
+
+    @overload
+    def add_transient[I](self, *, i: type[I]):
+        ...
+
+    @overload
+    def add_transient[T, I](self, *, t: type[T], i: type[I]):
+        ...
 
     @overload
     def add_transient[I](self, *, callable: Callable[..., I]):
@@ -314,6 +354,6 @@ class DependencyConfigurator(DependencyScope):
     def add_transient[T, I](self, *, t: type[T], callable: Callable[..., I]):
         ...
 
-    def add_transient[T, I](self, *, t: type[T] = None, callable: Callable[..., I] = None):
+    def add_transient[T, I](self, *, t: type[T] = None, i: type[I] = None, callable: Callable[..., I] = None):
         self._raise_if_closed()
-        self._add('transient', t=t, callable=callable)
+        self._add('transient', i=i, t=t, callable=callable)
