@@ -1,22 +1,26 @@
 [project]
 name = "dinkleberg-neighbourhood"
 version = "0.0.0"
-classifiers = ["Private :: Do Not Upload"]
+classifiers = [ "Private :: Do Not Upload" ]
 requires-python = ">=3.13"
-dependencies = [
-    "dinkleberg",
-]
+dependencies = [ "dinkleberg", "dinkleberg-abc", "dinkleberg-fastapi" ]
 
 [tool.uv.workspace]
-members = ["libs/dinkleberg"]
+members = [ "libs/dinkleberg", "libs/dinkleberg-abc", "libs/dinkleberg-fastapi" ]
 
 [tool.uv.sources.dinkleberg]
 workspace = true
 
+[tool.uv.sources.dinkleberg-abc]
+workspace = true
+
+[tool.uv.sources.dinkleberg-fastapi]
+workspace = true
+
 [dependency-groups]
 dev = [
-    "flake8>=7.3.0",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
+ "flake8>=7.3.0",
+ "pytest>=9.0.2",
+ "pytest-asyncio>=1.3.0",
 ]
 

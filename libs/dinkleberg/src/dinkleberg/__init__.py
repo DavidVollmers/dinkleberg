@@ -1,5 +1,5 @@
-from .dependency import Dependency
+from dinkleberg_abc import Dependency, DependencyScope
+
 from .dependency_configurator import DependencyConfigurator
-from .dependency_scope import DependencyScope
 
 __all__ = ['DependencyScope', 'DependencyConfigurator', 'Dependency']
