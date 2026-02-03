@@ -3,7 +3,12 @@ name = "dinkleberg-neighbourhood"
 version = "0.0.0"
 classifiers = [ "Private :: Do Not Upload" ]
 requires-python = ">=3.13"
-dependencies = [ "dinkleberg", "dinkleberg-abc", "dinkleberg-fastapi", "fastapi-example" ]
+dependencies = [
+ "dinkleberg",
+ "dinkleberg-abc",
+ "dinkleberg-fastapi",
+ "fastapi-example",
+]
 
 [tool.uv.workspace]
 members = [ "libs/dinkleberg", "libs/dinkleberg-abc", "libs/dinkleberg-fastapi", "examples/fastapi" ]

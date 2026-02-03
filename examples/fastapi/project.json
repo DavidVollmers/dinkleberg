@@ -4,5 +4,12 @@
   "projectType": "application",
   "tags": [],
   "// targets": "to see all targets run: nx show project fastapi-example --web",
-  "targets": {}
+  "targets": {
+    "serve": {
+      "command": "uv run python -m fastapi_example",
+      "options": {
+        "cwd": "examples/fastapi/src"
+      }
+    }
+  }
 }

@@ -8,6 +8,8 @@
       <sourceFolder url="file://$MODULE_DIR$/libs/dinkleberg-abc/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libs/dinkleberg-fastapi" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libs/dinkleberg-fastapi/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/fastapi" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/fastapi/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="uv (dinkleberg)" jdkType="Python SDK" />
