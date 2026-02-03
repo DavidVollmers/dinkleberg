@@ -1,4 +1,3 @@
-import abc
 import asyncio
 import inspect
 import logging
@@ -8,7 +7,7 @@ from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, 
 
 from dinkleberg_abc import DependencyScope, Dependency
 from .descriptor import Descriptor, Lifetime
-from .typing import get_static_params, get_public_methods, is_builtin_type
+from .typing import get_static_params, get_public_methods, is_builtin_type, is_abstract
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +61,32 @@ class DependencyConfigurator(DependencyScope):
         if t is None and i is None and generator is None and callable is None:
             raise ValueError(
                 'Invalid dependency registration. At least one of t, i, generator, or callable must be provided.')
+        if i is not None:
+            if is_builtin_type(i):
+                raise ValueError(f'Cannot use built-in type {i} as implementation.')
+
+            if get_origin(i) is not None:
+                raise ValueError(f'Cannot use generic type {i} as implementation.')
+
+            if is_abstract(i):
+                raise ValueError(f'Cannot use abstract class {i} as implementation.')
         if t is None:
             if i is not None:
                 t = i
             else:
                 t = self._infer_type(generator=generator, callable=callable)
+        elif generator is None and callable is None:
+            if is_builtin_type(t):
+                raise ValueError(
+                    f'Cannot register built-in type {t} without explicit implementation, generator or callable.')
+
+            if get_origin(t) is not None:
+                raise ValueError(
+                    f'Cannot register generic type {t} without explicit implementation, generator or callable.')
+
+            if is_abstract(t):
+                raise ValueError(
+                    f'Cannot register abstract class {t} without explicit implementation, generator or callable.')
         self._descriptors[t] = Descriptor(implementation=i, generator=generator, callable=callable, lifetime=lifetime)
 
     @staticmethod
@@ -120,7 +140,26 @@ class DependencyConfigurator(DependencyScope):
         if t in self._scoped_instances:
             return self._scoped_instances[t]
 
-        if t in self._descriptors:
+        descriptor = self._descriptors.get(t)
+        if descriptor is None or descriptor['implementation'] is not None:
+            if descriptor is None:
+                if is_builtin_type(t):
+                    raise ValueError(f'Cannot resolve built-in type {t} without explicit registration.')
+
+                if get_origin(t) is not None:
+                    raise ValueError(f'Cannot resolve generic type {t} without explicit registration.')
+
+                if is_abstract(t):
+                    raise ValueError(f'Cannot resolve abstract class {t} without explicit registration.')
+
+                factory = t
+            else:
+                factory = descriptor['implementation'] or t
+
+            is_generator = False
+            lifetime = descriptor['lifetime'] if descriptor else 'transient'
+            deps = await self._resolve_deps(factory.__init__)
+        else:
             descriptor = self._descriptors[t]
             lifetime = descriptor['lifetime']
             if lifetime == 'singleton' and self._parent:
@@ -130,20 +169,6 @@ class DependencyConfigurator(DependencyScope):
             is_generator = descriptor['generator'] is not None
             factory = descriptor['generator'] or descriptor['callable']
             deps = await self._resolve_deps(factory)
-        else:
-            if is_builtin_type(t):
-                raise ValueError(f'Cannot resolve built-in type {t} without explicit registration.')
-
-            if get_origin(t) is not None:
-                raise ValueError(f'Cannot resolve generic type {t} without explicit registration.')
-
-            if inspect.isabstract(t) or t is abc.ABC:
-                raise ValueError(f'Cannot resolve abstract class {t} without explicit registration.')
-
-            is_generator = False
-            lifetime = 'transient'
-            factory = t
-            deps = await self._resolve_deps(t.__init__)
 
         if is_generator:
             generator = factory(**deps, **kwargs)
@@ -291,6 +316,10 @@ class DependencyConfigurator(DependencyScope):
                             generator: Callable[..., AsyncGenerator[I]] = None,
                             callable: Callable[..., I] = None, instance: I = None):
         self._raise_if_closed()
+        if self._parent is not None:
+            raise RuntimeError(
+                'Cannot add singleton to a scoped DependencyConfigurator. Add it to the root DependencyConfigurator.')
+
         if instance is None:
             self._add('singleton', t=t, i=i, generator=generator, callable=callable)
             return

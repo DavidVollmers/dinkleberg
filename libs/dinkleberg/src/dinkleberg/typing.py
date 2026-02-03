@@ -1,6 +1,11 @@
+import abc
 import inspect
 from inspect import Parameter, signature
 from typing import Callable, get_origin
+
+
+def is_abstract(t: type) -> bool:
+    return inspect.isabstract(t) or t is abc.ABC
 
 
 def is_builtin_type(t: type) -> bool:
