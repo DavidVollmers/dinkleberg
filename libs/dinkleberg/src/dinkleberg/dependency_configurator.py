@@ -95,6 +95,9 @@ class DependencyConfigurator(DependencyScope):
                 raise ValueError(
                     f'Cannot register abstract class {t} without explicit implementation, generator or callable.')
 
+        if t in self._descriptors:
+            raise ValueError(f'Type {t} is already registered.')
+
         self._descriptors[t] = Descriptor(implementation=i, generator=generator, callable=callable, lifetime=lifetime)
 
     @staticmethod
@@ -343,6 +346,12 @@ class DependencyConfigurator(DependencyScope):
             return
         elif t is None:
             t = type(instance)
+
+        if t in self._descriptors:
+            raise ValueError(f'Type {t} is already registered with a descriptor. Cannot register singleton instance.')
+
+        if t in self._singleton_instances:
+            raise ValueError(f'Type {t} already has a singleton instance registered.')
 
         self._wrap_instance(instance)
 

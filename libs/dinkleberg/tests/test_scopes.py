@@ -29,3 +29,23 @@ async def test_resolve_scoped_generator(di):
     await scope.close()
 
     assert close_counter == 1
+
+
+@pytest.mark.asyncio
+async def test_override_singleton_instance(di):
+    class Test:
+        pass
+
+    test1 = Test()
+    di.add_singleton(t=Test, instance=test1)
+
+    scope = di.scope()
+
+    test2 = Test()
+    scope.add_singleton(t=Test, instance=test2)
+
+    instance1 = await di.resolve(Test)
+    instance2 = await scope.resolve(Test)
+
+    assert instance1 is test1
+    assert instance2 is test2
