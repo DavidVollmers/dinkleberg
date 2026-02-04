@@ -21,9 +21,16 @@ class DependencyConfigurator(DependencyScope):
         self._descriptors: dict[type, Descriptor] = {}
         self._singleton_instances = {}
         self._scoped_instances = {}
+        self._configurators: dict[type, list[Callable[[object], object | None]]] = {}
         self._active_generators = []
         self._scopes = []
         self._closed = False
+
+    def configure[T](self, t: type[T], configurator: Callable[[T], T | None]) -> None:
+        self._raise_if_closed()
+        if t not in self._configurators:
+            self._configurators[t] = []
+        self._configurators[t].append(configurator)
 
     async def close(self) -> None:
         if self._closed:
@@ -51,6 +58,7 @@ class DependencyConfigurator(DependencyScope):
         self._singleton_instances.clear()
         self._active_generators.clear()
         self._scoped_instances.clear()
+        self._configurators.clear()
         self._descriptors.clear()
         self._scopes.clear()
 
@@ -58,7 +66,7 @@ class DependencyConfigurator(DependencyScope):
             raise ExceptionGroup('Errors occurred during closing DependencyConfigurator', exceptions)
 
     def _add(self, lifetime: Lifetime, *, t: type = None, i: type = None,
-             generator: Callable[..., AsyncGenerator] = None, callable: Callable = None):
+             generator: Callable[..., AsyncGenerator] = None, callable: Callable = None, override: bool = False):
         if t is None and i is None and generator is None and callable is None:
             raise ValueError(
                 'Invalid dependency registration. At least one of t, i, generator, or callable must be provided.')
@@ -95,7 +103,7 @@ class DependencyConfigurator(DependencyScope):
                 raise ValueError(
                     f'Cannot register abstract class {t} without explicit implementation, generator or callable.')
 
-        if t in self._descriptors:
+        if t in self._descriptors and not override:
             raise ValueError(f'Type {t} is already registered.')
 
         self._descriptors[t] = Descriptor(implementation=i, generator=generator, callable=callable, lifetime=lifetime)
@@ -127,6 +135,7 @@ class DependencyConfigurator(DependencyScope):
         self._raise_if_closed()
         scope = DependencyConfigurator(self)
         scope._descriptors = self._descriptors.copy()
+        scope._configurators = self._configurators.copy()
         self._scopes.append(scope)
         return scope
 
@@ -209,7 +218,7 @@ class DependencyConfigurator(DependencyScope):
             finally:
                 await instance.aclose()
 
-        self._wrap_instance(instance)
+        self._wrap_instance(t, instance)
 
         if lifetime == 'singleton':
             self._singleton_instances[t] = instance
@@ -282,9 +291,15 @@ class DependencyConfigurator(DependencyScope):
         return wrapped_func
 
     # TODO handle __slots__
-    def _wrap_instance(self, instance):
+    def _wrap_instance(self, t: type, instance: object):
         if getattr(instance, '__dinkleberg__', False):
             return
+
+        configurators = self._configurators.get(t, [])
+        for configurator in configurators:
+            result = configurator(instance)
+            if result is not None:
+                instance = result
 
         methods = get_public_methods(instance)
         for name, value in methods:
@@ -301,48 +316,48 @@ class DependencyConfigurator(DependencyScope):
             pass
 
     @overload
-    def add_singleton[I](self, *, instance: I):
+    def add_singleton[I](self, *, instance: I, override: bool = False):
         ...
 
     @overload
-    def add_singleton[T, I](self, *, t: type[T], instance: I):
+    def add_singleton[T, I](self, *, t: type[T], instance: I, override: bool = False):
         ...
 
     @overload
-    def add_singleton[T](self, *, t: type[T]):
+    def add_singleton[T](self, *, t: type[T], override: bool = False):
         ...
 
     @overload
-    def add_singleton[I](self, *, i: type[I]):
+    def add_singleton[I](self, *, i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_singleton[T, I](self, *, t: type[T], i: type[I]):
+    def add_singleton[T, I](self, *, t: type[T], i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_singleton[I](self, *, callable: Callable[..., I]):
+    def add_singleton[I](self, *, callable: Callable[..., I], override: bool = False):
         ...
 
     @overload
-    def add_singleton[T, I](self, *, t: type[T], callable: Callable[..., I]):
+    def add_singleton[T, I](self, *, t: type[T], callable: Callable[..., I], override: bool = False):
         ...
 
     @overload
-    def add_singleton[I](self, *, generator: Callable[..., AsyncGenerator[I]]):
+    def add_singleton[I](self, *, generator: Callable[..., AsyncGenerator[I]], override: bool = False):
         ...
 
     @overload
-    def add_singleton[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
+    def add_singleton[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]], override: bool = False):
         ...
 
     def add_singleton[T, I](self, *, t: type[T] = None, i: type[I] = None,
                             generator: Callable[..., AsyncGenerator[I]] = None,
-                            callable: Callable[..., I] = None, instance: I = None):
+                            callable: Callable[..., I] = None, instance: I = None, override: bool = False):
         self._raise_if_closed()
 
         if instance is None:
-            self._add('singleton', t=t, i=i, generator=generator, callable=callable)
+            self._add('singleton', t=t, i=i, generator=generator, callable=callable, override=override)
             return
         elif t is None:
             t = type(instance)
@@ -350,66 +365,68 @@ class DependencyConfigurator(DependencyScope):
         if t in self._descriptors:
             raise ValueError(f'Type {t} is already registered with a descriptor. Cannot register singleton instance.')
 
-        if t in self._singleton_instances:
+        if t in self._singleton_instances and not override:
             raise ValueError(f'Type {t} already has a singleton instance registered.')
 
-        self._wrap_instance(instance)
+        self._wrap_instance(t, instance)
 
         self._singleton_instances[t] = instance
 
     @overload
-    def add_scoped[T](self, *, t: type[T]):
+    def add_scoped[T](self, *, t: type[T], override: bool = False):
         ...
 
     @overload
-    def add_scoped[I](self, *, i: type[I]):
+    def add_scoped[I](self, *, i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_scoped[T, I](self, *, t: type[T], i: type[I]):
+    def add_scoped[T, I](self, *, t: type[T], i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_scoped[I](self, *, callable: Callable[..., I]):
+    def add_scoped[I](self, *, callable: Callable[..., I], override: bool = False):
         ...
 
     @overload
-    def add_scoped[T, I](self, *, t: type[T], callable: Callable[..., I]):
+    def add_scoped[T, I](self, *, t: type[T], callable: Callable[..., I], override: bool = False):
         ...
 
     @overload
-    def add_scoped[I](self, *, generator: Callable[..., AsyncGenerator[I]]):
+    def add_scoped[I](self, *, generator: Callable[..., AsyncGenerator[I]], override: bool = False):
         ...
 
     @overload
-    def add_scoped[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]]):
+    def add_scoped[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]], override: bool = False):
         ...
 
     def add_scoped[T, I](self, *, t: type[T] = None, i: type[I] = None,
-                         generator: Callable[..., AsyncGenerator[I]] = None, callable: Callable[..., I] = None):
+                         generator: Callable[..., AsyncGenerator[I]] = None, callable: Callable[..., I] = None,
+                         override: bool = False):
         self._raise_if_closed()
-        self._add('scoped', t=t, i=i, generator=generator, callable=callable)
+        self._add('scoped', t=t, i=i, generator=generator, callable=callable, override=override)
 
     @overload
-    def add_transient[T](self, *, t: type[T]):
+    def add_transient[T](self, *, t: type[T], override: bool = False):
         ...
 
     @overload
-    def add_transient[I](self, *, i: type[I]):
+    def add_transient[I](self, *, i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_transient[T, I](self, *, t: type[T], i: type[I]):
+    def add_transient[T, I](self, *, t: type[T], i: type[I], override: bool = False):
         ...
 
     @overload
-    def add_transient[I](self, *, callable: Callable[..., I]):
+    def add_transient[I](self, *, callable: Callable[..., I], override: bool = False):
         ...
 
     @overload
-    def add_transient[T, I](self, *, t: type[T], callable: Callable[..., I]):
+    def add_transient[T, I](self, *, t: type[T], callable: Callable[..., I], override: bool = False):
         ...
 
-    def add_transient[T, I](self, *, t: type[T] = None, i: type[I] = None, callable: Callable[..., I] = None):
+    def add_transient[T, I](self, *, t: type[T] = None, i: type[I] = None, callable: Callable[..., I] = None,
+                            override: bool = False):
         self._raise_if_closed()
-        self._add('transient', i=i, t=t, callable=callable)
+        self._add('transient', i=i, t=t, callable=callable, override=override)
