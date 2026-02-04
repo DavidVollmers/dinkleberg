@@ -29,3 +29,15 @@ async def test_builtin_parameters(di):
         await di.resolve(Service)
 
     assert f'Service.__init__() missing 1 required positional argument: \'value\'' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_used_after_closing(di):
+    di.add_singleton(t=int, instance=42)
+    await di.close()
+
+    with pytest.raises(RuntimeError, match='DependencyScope is already closed.'):
+        await di.resolve(int)
+
+    with pytest.raises(RuntimeError, match='DependencyScope is already closed.'):
+        di.add_singleton(t=str, instance='test')

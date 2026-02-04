@@ -1,3 +1,5 @@
+from typing import AsyncGenerator
+
 import pytest
 
 
@@ -30,3 +32,22 @@ async def test_resolve_transient_callable(di):
     assert isinstance(instance2, TestClass)
 
     assert instance1 is not instance2
+
+
+@pytest.mark.asyncio
+async def test_transient_nested_dependencies(di):
+    class Repository:
+        # noinspection PyMethodMayBeStatic
+        def get_data(self):
+            return 'data'
+
+    class Service:
+        def __init__(self, repo: Repository):
+            self.repo = repo
+
+        def run(self):
+            return self.repo.get_data()
+
+    svc = await di.resolve(Service)
+
+    assert svc.run() == 'data'

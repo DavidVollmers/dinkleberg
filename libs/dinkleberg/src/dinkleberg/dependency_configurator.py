@@ -90,7 +90,7 @@ class DependencyConfigurator(DependencyScope):
                 t = i
             else:
                 t = self._infer_type(generator=generator, callable=callable)
-        elif generator is None and callable is None:
+        elif generator is None and callable is None and i is None:
             if is_builtin_type(t):
                 raise ValueError(
                     f'Cannot register built-in type {t} without explicit implementation, generator or callable.')
@@ -129,7 +129,7 @@ class DependencyConfigurator(DependencyScope):
 
     def _raise_if_closed(self):
         if self._closed:
-            raise RuntimeError('DependencyConfigurator is already closed.')
+            raise RuntimeError('DependencyScope is already closed.')
 
     def scope(self) -> 'DependencyConfigurator':
         self._raise_if_closed()
@@ -292,7 +292,7 @@ class DependencyConfigurator(DependencyScope):
 
     # TODO handle __slots__
     def _wrap_instance(self, t: type, instance: object):
-        if getattr(instance, '__dinkleberg__', False):
+        if getattr(instance, '__dinkleberg__', False) or is_builtin_type(t):
             return
 
         configurators = self._configurators.get(t, [])

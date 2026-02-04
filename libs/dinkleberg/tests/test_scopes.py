@@ -49,3 +49,20 @@ async def test_override_singleton_instance(di):
 
     assert instance1 is test1
     assert instance2 is test2
+
+
+@pytest.mark.asyncio
+async def test_scope_isolation(di):
+    class Session:
+        pass
+
+    di.add_scoped(t=Session)
+
+    s1 = await di.resolve(Session)
+
+    scope = di.scope()
+    s2 = await scope.resolve(Session)
+
+    assert isinstance(s1, Session)
+    assert isinstance(s2, Session)
+    assert s1 is not s2
