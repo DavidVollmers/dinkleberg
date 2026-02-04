@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+from functools import wraps
 from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin
@@ -135,8 +136,14 @@ class DependencyConfigurator(DependencyScope):
 
     # TODO circular dependency detection
     # TODO singleton race condition prevention (async.Lock)
-    async def resolve[T](self, t: type[T], **kwargs) -> T:
+    async def resolve[T](self, t: type[T] | Callable, **kwargs) -> T:
         self._raise_if_closed()
+
+        if not inspect.isclass(t):
+            if not inspect.isfunction(t):
+                raise ValueError(f'Cannot resolve type {t}. Only classes and functions are supported.')
+
+            return self._wrap_func(t)
 
         if t == DependencyScope:
             return self
@@ -249,6 +256,28 @@ class DependencyConfigurator(DependencyScope):
 
         return actual_kwargs
 
+    def _wrap_func(self, func: Callable):
+        signature = inspect.signature(func)
+
+        dep_params = MappingProxyType({
+            param_name: param
+            for param_name, param in signature.parameters.items()
+            if isinstance(param.default, Dependency)
+        })
+
+        if not dep_params:
+            return func
+
+        if not asyncio.iscoroutinefunction(func):
+            raise NotImplementedError('Synchronous functions with Dependency() defaults are not supported.')
+
+        @wraps(func)
+        async def wrapped_func(*args, **kwargs):
+            new_kwargs = await self._resolve_kwargs(signature, func.__name__, args, kwargs, dep_params)
+            return await func(*args, **new_kwargs)
+
+        return wrapped_func
+
     # TODO handle __slots__
     def _wrap_instance(self, instance):
         if getattr(instance, '__dinkleberg__', False):
@@ -256,25 +285,11 @@ class DependencyConfigurator(DependencyScope):
 
         methods = get_public_methods(instance)
         for name, value in methods:
-            signature = inspect.signature(value)
-
-            dep_params = MappingProxyType({
-                param_name: param
-                for param_name, param in signature.parameters.items()
-                if isinstance(param.default, Dependency)
-            })
-            if not dep_params:
-                continue
-
             instance_method = getattr(instance, name)
-            if asyncio.iscoroutinefunction(instance_method):
-                async def wrapped_method(*args, __m=instance_method, __s=signature, __n=name, __d=dep_params, **kwargs):
-                    new_kwargs = await self._resolve_kwargs(__s, __n, args, kwargs, __d)
-                    return await __m(*args, **new_kwargs)
 
-                setattr(instance, name, wrapped_method)
-            else:
-                raise NotImplementedError('Synchronous methods with Dependency() defaults are not supported.')
+            wrapped_method = self._wrap_func(instance_method)
+
+            setattr(instance, name, wrapped_method)
 
         try:
             setattr(instance, '__dinkleberg__', True)
