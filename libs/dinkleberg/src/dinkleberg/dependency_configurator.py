@@ -293,7 +293,7 @@ class DependencyConfigurator(DependencyScope):
     # TODO handle __slots__
     def _wrap_instance(self, t: type, instance: object):
         dinkleberg_attr = getattr(instance, '__dinkleberg__', None)
-        if dinkleberg_attr is not None or is_builtin_type(t):
+        if dinkleberg_attr is True or is_builtin_type(t):
             return
 
         configurators = self._configurators.get(t, [])
@@ -302,13 +302,17 @@ class DependencyConfigurator(DependencyScope):
             if result is not None:
                 instance = result
 
+        if dinkleberg_attr is False:
+            return
+
         methods = get_public_methods(instance)
         for name, value in methods:
             instance_method = getattr(instance, name)
 
             wrapped_method = self._wrap_func(instance_method)
 
-            setattr(instance, name, wrapped_method)
+            if wrapped_method is not instance_method:
+                setattr(instance, name, wrapped_method)
 
         try:
             setattr(instance, '__dinkleberg__', True)
