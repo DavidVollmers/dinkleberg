@@ -292,7 +292,8 @@ class DependencyConfigurator(DependencyScope):
 
     # TODO handle __slots__
     def _wrap_instance(self, t: type, instance: object):
-        if getattr(instance, '__dinkleberg__', False) or is_builtin_type(t):
+        dinkleberg_attr = getattr(instance, '__dinkleberg__', None)
+        if dinkleberg_attr is not None or is_builtin_type(t):
             return
 
         configurators = self._configurators.get(t, [])
@@ -362,7 +363,7 @@ class DependencyConfigurator(DependencyScope):
         elif t is None:
             t = type(instance)
 
-        if t in self._descriptors:
+        if t in self._descriptors and not override:
             raise ValueError(f'Type {t} is already registered with a descriptor. Cannot register singleton instance.')
 
         if t in self._singleton_instances and not override:
@@ -371,6 +372,9 @@ class DependencyConfigurator(DependencyScope):
         self._wrap_instance(t, instance)
 
         self._singleton_instances[t] = instance
+
+        if t in self._descriptors:
+            del self._descriptors[t]
 
     @overload
     def add_scoped[T](self, *, t: type[T], override: bool = False):
