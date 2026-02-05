@@ -1,20 +1,31 @@
 import abc
 import inspect
-from inspect import Parameter, signature
+from functools import lru_cache
+from inspect import Parameter, Signature
 from typing import Callable, get_origin
 
+from dinkleberg_abc import Dependency
 
+
+@lru_cache(maxsize=4096)
+def get_signature(func: Callable) -> Signature:
+    return inspect.signature(func)
+
+
+@lru_cache(maxsize=4096)
 def is_abstract(t: type) -> bool:
     return inspect.isabstract(t) or t is abc.ABC
 
 
+@lru_cache(maxsize=4096)
 def is_builtin_type(t: type) -> bool:
     origin = get_origin(t) or t
     return getattr(origin, '__module__', None) in ('builtins', 'typing', 'types')
 
 
+@lru_cache(maxsize=4096)
 def get_static_params(func: Callable) -> list[Parameter]:
-    sig = signature(func)
+    sig = get_signature(func)
 
     params = list(sig.parameters.values())
 
@@ -24,13 +35,25 @@ def get_static_params(func: Callable) -> list[Parameter]:
     return params
 
 
-def get_public_methods(obj: object) -> list[tuple[str, Callable]]:
-    methods = []
+@lru_cache(maxsize=1024)
+def get_methods_to_wrap(cls: type) -> tuple[str, ...]:
+    cls = get_origin(cls) or cls
 
-    for name in dir(obj.__class__):
-        attr = getattr(obj.__class__, name)
+    methods_to_wrap = []
 
-        if inspect.isroutine(attr) and not isinstance(attr, property) and not name.startswith('_'):
-            methods.append((name, attr))
+    for name in dir(cls):
+        if name.startswith('_'): continue
 
-    return methods
+        try:
+            attr = getattr(cls, name)
+            if not inspect.isfunction(attr): continue
+
+            sig = get_signature(attr)
+            for param in sig.parameters.values():
+                if isinstance(param.default, Dependency):
+                    methods_to_wrap.append(name)
+                    break
+        except (AttributeError, ValueError):
+            continue
+
+    return tuple(methods_to_wrap)

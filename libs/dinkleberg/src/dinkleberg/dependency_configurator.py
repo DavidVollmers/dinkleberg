@@ -8,7 +8,7 @@ from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, 
 
 from dinkleberg_abc import DependencyScope, Dependency
 from .descriptor import Descriptor, Lifetime
-from .typing import get_static_params, get_public_methods, is_builtin_type, is_abstract
+from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +282,7 @@ class DependencyConfigurator(DependencyScope):
             resolve_tasks.append(self.resolve(ann))
 
         if resolve_tasks:
+            # TODO optimistic synchronous resolution
             results = await asyncio.gather(*resolve_tasks)
             resolved_deps = dict(zip(resolve_names, results))
             factory_kwargs.update(resolved_deps)
@@ -304,6 +305,7 @@ class DependencyConfigurator(DependencyScope):
             return actual_kwargs
 
         names, types = zip(*params_to_resolve)
+        # TODO optimistic synchronous resolution
         resolved_values = await asyncio.gather(*(self.resolve(t, **kwargs) for t in types))
 
         actual_kwargs.update(dict(zip(names, resolved_values)))
@@ -311,7 +313,7 @@ class DependencyConfigurator(DependencyScope):
         return actual_kwargs
 
     def _wrap_func(self, func: Callable):
-        signature = inspect.signature(func)
+        signature = get_signature(func)
 
         dep_params = MappingProxyType({
             param_name: param
@@ -345,18 +347,14 @@ class DependencyConfigurator(DependencyScope):
 
     # TODO handle __slots__
     def _wrap_instance(self, t: type, instance: object) -> object:
-        dinkleberg_attr = getattr(instance, '__dinkleberg__', None)
-        if dinkleberg_attr is not None or is_builtin_type(t):
+        if hasattr(instance, '__dinkleberg__') or is_builtin_type(t):
             return instance
 
-        methods = get_public_methods(instance)
-        for name, value in methods:
+        for name in get_methods_to_wrap(t):
             instance_method = getattr(instance, name)
-
-            wrapped_method = self._wrap_func(instance_method)
-
-            if wrapped_method is not instance_method:
-                setattr(instance, name, wrapped_method)
+            wrapped = self._wrap_func(instance_method)
+            if wrapped is not instance_method:
+                setattr(instance, name, wrapped)
 
         try:
             setattr(instance, '__dinkleberg__', True)
