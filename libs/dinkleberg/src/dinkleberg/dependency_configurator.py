@@ -141,7 +141,7 @@ class DependencyConfigurator(DependencyScope):
 
     def _lookup_singleton(self, t: type):
         if t in self._singleton_instances:
-            return self._singleton_instances[t]
+            return self._configure_instance(t, self._singleton_instances[t])
         if self._parent:
             return self._parent._lookup_singleton(t)
         return None
@@ -158,13 +158,13 @@ class DependencyConfigurator(DependencyScope):
             return self._wrap_func(t)
 
         if t == DependencyScope:
-            return self
+            return self._configure_instance(t, self)
 
         singleton = self._lookup_singleton(t)
         if singleton is not None:
             return singleton
         if t in self._scoped_instances:
-            return self._scoped_instances[t]
+            return self._configure_instance(t, self._scoped_instances[t])
 
         descriptor = self._descriptors.get(t)
         if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
@@ -218,14 +218,16 @@ class DependencyConfigurator(DependencyScope):
             finally:
                 await instance.aclose()
 
-        self._wrap_instance(t, instance)
+        configured_instance = self._configure_instance(t, instance)
+
+        wrapped_instance = self._wrap_instance(t, configured_instance)
 
         if lifetime == 'singleton':
-            self._singleton_instances[t] = instance
+            self._singleton_instances[t] = wrapped_instance
         elif lifetime == 'scoped':
-            self._scoped_instances[t] = instance
+            self._scoped_instances[t] = wrapped_instance
 
-        return instance
+        return wrapped_instance
 
     async def _resolve_deps(self, func: Callable) -> dict:
         params = get_static_params(func)
@@ -290,20 +292,22 @@ class DependencyConfigurator(DependencyScope):
 
         return wrapped_func
 
-    # TODO handle __slots__
-    def _wrap_instance(self, t: type, instance: object):
-        dinkleberg_attr = getattr(instance, '__dinkleberg__', None)
-        if dinkleberg_attr is True or is_builtin_type(t):
-            return
+    def _configure_instance(self, t: type, instance: object) -> object:
+        if t not in self._configurators:
+            return instance
 
-        configurators = self._configurators.get(t, [])
-        for configurator in configurators:
+        for configurator in self._configurators[t]:
             result = configurator(instance)
             if result is not None:
                 instance = result
 
-        if dinkleberg_attr is False:
-            return
+        return instance
+
+    # TODO handle __slots__
+    def _wrap_instance(self, t: type, instance: object) -> object:
+        dinkleberg_attr = getattr(instance, '__dinkleberg__', None)
+        if dinkleberg_attr is not None or is_builtin_type(t):
+            return instance
 
         methods = get_public_methods(instance)
         for name, value in methods:
@@ -319,6 +323,8 @@ class DependencyConfigurator(DependencyScope):
         except (AttributeError, TypeError):
             # Some objects (like those with __slots__) might not allow new attributes
             pass
+
+        return instance
 
     @overload
     def add_singleton[I](self, *, instance: I, override: bool = False):
@@ -373,9 +379,11 @@ class DependencyConfigurator(DependencyScope):
         if t in self._singleton_instances and not override:
             raise ValueError(f'Type {t} already has a singleton instance registered.')
 
-        self._wrap_instance(t, instance)
+        configured_instance = self._configure_instance(t, instance)
 
-        self._singleton_instances[t] = instance
+        wrapped_instance = self._wrap_instance(t, configured_instance)
+
+        self._singleton_instances[t] = wrapped_instance
 
         if t in self._descriptors:
             del self._descriptors[t]
