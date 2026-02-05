@@ -1,3 +1,5 @@
+from typing import Union
+
 import pytest
 
 
@@ -41,3 +43,19 @@ async def test_used_after_closing(di):
 
     with pytest.raises(RuntimeError, match='DependencyScope is already closed.'):
         di.add_singleton(t=str, instance='test')
+
+
+@pytest.mark.asyncio
+async def test_resolve_union(di):
+    class Test1:
+        pass
+
+    class Test2:
+        pass
+
+    union = Union[Test1, Test2]
+
+    with pytest.raises(TypeError) as exc_info:
+        await di.resolve(union)
+
+    assert f'Cannot resolve built-in type {union} without explicit registration.' in str(exc_info.value)

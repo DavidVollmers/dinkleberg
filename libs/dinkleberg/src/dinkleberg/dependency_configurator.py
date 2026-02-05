@@ -77,13 +77,13 @@ class DependencyConfigurator(DependencyScope):
 
         if i is not None:
             if is_builtin_type(i):
-                raise ValueError(f'Cannot use built-in type {i} as implementation.')
+                raise TypeError(f'Cannot use built-in type {i} as implementation.')
 
             if get_origin(i) is not None:
-                raise ValueError(f'Cannot use generic type {i} as implementation.')
+                raise TypeError(f'Cannot use generic type {i} as implementation.')
 
             if is_abstract(i):
-                raise ValueError(f'Cannot use abstract class {i} as implementation.')
+                raise TypeError(f'Cannot use abstract class {i} as implementation.')
 
         if t is None:
             if i is not None:
@@ -92,15 +92,15 @@ class DependencyConfigurator(DependencyScope):
                 t = self._infer_type(generator=generator, callable=callable)
         elif generator is None and callable is None and i is None:
             if is_builtin_type(t):
-                raise ValueError(
+                raise TypeError(
                     f'Cannot register built-in type {t} without explicit implementation, generator or callable.')
 
             if get_origin(t) is not None:
-                raise ValueError(
+                raise TypeError(
                     f'Cannot register generic type {t} without explicit implementation, generator or callable.')
 
             if is_abstract(t):
-                raise ValueError(
+                raise TypeError(
                     f'Cannot register abstract class {t} without explicit implementation, generator or callable.')
 
         if t in self._descriptors and not override:
@@ -125,7 +125,7 @@ class DependencyConfigurator(DependencyScope):
             return return_hint
         except Exception:
             pass
-        raise ValueError('Could not infer type from generator. Please provide the type explicitly.')
+        raise TypeError('Could not infer type from generator. Please provide the type explicitly.')
 
     def _raise_if_closed(self):
         if self._closed:
@@ -151,9 +151,10 @@ class DependencyConfigurator(DependencyScope):
     async def resolve[T](self, t: type[T] | Callable, **kwargs) -> T:
         self._raise_if_closed()
 
-        if not inspect.isclass(t):
+        origin = get_origin(t)
+        if not inspect.isclass(t) and origin is None:
             if not inspect.isfunction(t):
-                raise ValueError(f'Cannot resolve type {t}. Only classes and functions are supported.')
+                raise TypeError(f'Cannot resolve type {t}. Only classes and functions are supported.')
 
             return self._wrap_func(t)
 
@@ -168,15 +169,19 @@ class DependencyConfigurator(DependencyScope):
 
         descriptor = self._descriptors.get(t)
         if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
+
+            if descriptor is None and inspect.isclass(origin):
+                descriptor = self._descriptors.get(origin)
+
             if descriptor is None:
                 if is_builtin_type(t):
-                    raise ValueError(f'Cannot resolve built-in type {t} without explicit registration.')
+                    raise TypeError(f'Cannot resolve built-in type {t} without explicit registration.')
 
-                if get_origin(t) is not None:
-                    raise ValueError(f'Cannot resolve generic type {t} without explicit registration.')
+                if origin is not None:
+                    raise TypeError(f'Cannot resolve generic type {t} without explicit registration.')
 
                 if is_abstract(t):
-                    raise ValueError(f'Cannot resolve abstract class {t} without explicit registration.')
+                    raise TypeError(f'Cannot resolve abstract class {t} without explicit registration.')
 
                 factory = t
             else:
