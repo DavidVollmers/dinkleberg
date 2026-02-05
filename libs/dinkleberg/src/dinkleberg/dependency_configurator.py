@@ -4,7 +4,7 @@ import logging
 from functools import wraps
 from inspect import Signature
 from types import MappingProxyType
-from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin
+from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
 from dinkleberg_abc import DependencyScope, Dependency
 from .descriptor import Descriptor, Lifetime
@@ -32,6 +32,7 @@ class DependencyConfigurator(DependencyScope):
             self._configurators[t] = []
         self._configurators[t].append(configurator)
 
+    # TODO race condition prevention (async.Lock)
     async def close(self) -> None:
         if self._closed:
             return
@@ -39,8 +40,7 @@ class DependencyConfigurator(DependencyScope):
 
         exceptions = []
 
-        # TODO close generators in reverse order of creation (LIFO)
-        for generator in self._active_generators:
+        for generator in reversed(self._active_generators):
             try:
                 await generator.__anext__()
                 raise RuntimeError('Generator did not stop after yielding a single value.')
@@ -118,10 +118,10 @@ class DependencyConfigurator(DependencyScope):
             if not return_hint:
                 pass
 
-            # This looks for the generic arguments of the return type
-            # e.g., if hint is AsyncGenerator[User, None], it extracts User
-            if hasattr(return_hint, '__args__'):
+            origin = get_origin(return_hint)
+            if origin is AsyncGenerator:
                 return return_hint.__args__[0]
+
             return return_hint
         except Exception:
             pass
@@ -170,9 +170,12 @@ class DependencyConfigurator(DependencyScope):
         descriptor = self._descriptors.get(t)
         if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
 
-            if descriptor is None and inspect.isclass(origin):
+            is_origin_class = inspect.isclass(origin)
+            if descriptor is None and is_origin_class:
+                # noinspection PyTypeChecker
                 descriptor = self._descriptors.get(origin)
 
+            generic_map = None
             if descriptor is None:
                 if is_builtin_type(t):
                     raise TypeError(f'Cannot resolve built-in type {t} without explicit registration.')
@@ -184,12 +187,19 @@ class DependencyConfigurator(DependencyScope):
                     raise TypeError(f'Cannot resolve abstract class {t} without explicit registration.')
 
                 factory = t
+            elif is_origin_class:
+                factory = descriptor['implementation'] or origin
+
+                type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
+                t_args = get_args(t)
+                if type_params and t_args:
+                    generic_map = dict(zip(type_params, t_args))
             else:
                 factory = descriptor['implementation'] or t
 
             is_generator = False
             lifetime = descriptor['lifetime'] if descriptor else 'transient'
-            deps = await self._resolve_deps(factory.__init__)
+            factory_kwargs = await self._resolve_factory_kwargs(factory.__init__, kwargs, generic_map)
         else:
             lifetime = descriptor['lifetime']
             if lifetime == 'singleton' and self._parent:
@@ -198,10 +208,10 @@ class DependencyConfigurator(DependencyScope):
 
             is_generator = descriptor['generator'] is not None
             factory = descriptor['generator'] or descriptor['callable']
-            deps = await self._resolve_deps(factory)
+            factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs)
 
         if is_generator:
-            generator = factory(**deps, **kwargs)
+            generator = factory(**factory_kwargs)
             try:
                 instance = await generator.__anext__()
             except StopAsyncIteration:
@@ -209,9 +219,9 @@ class DependencyConfigurator(DependencyScope):
 
             self._active_generators.append(generator)
         elif asyncio.iscoroutinefunction(factory):
-            instance = await factory(**deps, **kwargs)
+            instance = await factory(**factory_kwargs)
         else:
-            instance = factory(**deps, **kwargs)
+            instance = factory(**factory_kwargs)
 
         if isinstance(instance, AsyncGenerator):
             try:
@@ -234,24 +244,49 @@ class DependencyConfigurator(DependencyScope):
 
         return wrapped_instance
 
-    async def _resolve_deps(self, func: Callable) -> dict:
-        params = get_static_params(func)
-        tasks = []
-        names = []
+    async def _resolve_factory_kwargs(self, factory: Callable, kwargs: dict, generic_map: dict = None) -> dict:
+        params = get_static_params(factory)
+
+        factory_kwargs = {}
+        resolve_tasks = []
+        resolve_names = []
 
         for param in params:
-            if not param.annotation or param.annotation is inspect.Parameter.empty:
+            name = param.name
+            ann = param.annotation
+
+            if name in kwargs:
+                factory_kwargs[name] = kwargs[name]
                 continue
 
-            if is_builtin_type(param.annotation):
+            if ann is inspect.Parameter.empty:
                 continue
 
-            # TODO handle more complex cases (e.g., Union, Optional, etc.)
-            names.append(param.name)
-            tasks.append(self.resolve(param.annotation))
+            if generic_map:
+                if get_origin(ann) is type:
+                    arg = get_args(ann)[0]
+                    if arg in generic_map:
+                        factory_kwargs[name] = generic_map[arg]
+                        continue
 
-        results = await asyncio.gather(*tasks)
-        return dict(zip(names, results))
+                if ann in generic_map:
+                    actual_type = generic_map[ann]
+                    resolve_names.append(name)
+                    resolve_tasks.append(self.resolve(actual_type))
+                    continue
+
+            if is_builtin_type(ann):
+                continue
+
+            resolve_names.append(name)
+            resolve_tasks.append(self.resolve(ann))
+
+        if resolve_tasks:
+            results = await asyncio.gather(*resolve_tasks)
+            resolved_deps = dict(zip(resolve_names, results))
+            factory_kwargs.update(resolved_deps)
+
+        return factory_kwargs
 
     async def _resolve_kwargs(self, signature: Signature, name: str, args: tuple, kwargs: dict,
                               dep_params: Mapping[str, inspect.Parameter]) -> dict:

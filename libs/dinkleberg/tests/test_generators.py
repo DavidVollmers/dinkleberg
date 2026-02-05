@@ -99,37 +99,37 @@ async def test_scope_independent_disposal(di):
     await di.close()
     assert events == ['res_start', 'res_start', 'res_stop', 'res_stop']
 
-# TODO implement LIFO disposal order
-# @pytest.mark.asyncio
-# async def test_generator_lifo_disposal(di):
-#     events = []
-#
-#     class LowLevel:
-#         pass
-#
-#     class HighLevel:
-#         def __init__(self, child: LowLevel):
-#             self.child = child
-#
-#     async def low_gen() -> AsyncGenerator[LowLevel, None]:
-#         events.append('low_start')
-#         yield LowLevel()
-#         events.append('low_stop')
-#
-#     async def high_gen(child: LowLevel) -> AsyncGenerator[HighLevel, None]:
-#         events.append('high_start')
-#         yield HighLevel(child)
-#         events.append('high_stop')
-#
-#     di.add_scoped(t=LowLevel, generator=low_gen)
-#     di.add_scoped(t=HighLevel, generator=high_gen)
-#
-#     await di.resolve(HighLevel)
-#
-#     # Setup order: Low -> High
-#     assert events == ['low_start', 'high_start']
-#
-#     await di.close()
-#
-#     # Teardown order: High -> Low (LIFO)
-#     assert events == ['low_start', 'high_start', 'high_stop', 'low_stop']
+
+@pytest.mark.asyncio
+async def test_generator_lifo_disposal(di):
+    events = []
+
+    class LowLevel:
+        pass
+
+    class HighLevel:
+        def __init__(self, child: LowLevel):
+            self.child = child
+
+    async def low_gen() -> AsyncGenerator[LowLevel, None]:
+        events.append('low_start')
+        yield LowLevel()
+        events.append('low_stop')
+
+    async def high_gen(child: LowLevel) -> AsyncGenerator[HighLevel, None]:
+        events.append('high_start')
+        yield HighLevel(child)
+        events.append('high_stop')
+
+    di.add_scoped(t=LowLevel, generator=low_gen)
+    di.add_scoped(t=HighLevel, generator=high_gen)
+
+    await di.resolve(HighLevel)
+
+    # Setup order: Low -> High
+    assert events == ['low_start', 'high_start']
+
+    await di.close()
+
+    # Teardown order: High -> Low (LIFO)
+    assert events == ['low_start', 'high_start', 'high_stop', 'low_stop']

@@ -1,10 +1,8 @@
 import pytest
 
-from dinkleberg import Dependency
-
 
 @pytest.mark.asyncio
-async def test_generic_provider(di):
+async def test_resolve_generic_by_callable(di):
     class GenericClass[T]:
         def __init__(self, value: T):
             self.value = value
@@ -27,3 +25,17 @@ async def test_resolve_generic_function(di):
     result = await f('Hello, World!')
 
     assert result == 'Hello, World!'
+
+
+@pytest.mark.asyncio
+async def test_resolve_generic_class_with_type_param(di):
+    class Test[T]:
+        def __init__(self, t: type[T]):
+            self.t = t
+
+    di.add_transient(t=Test)
+
+    instance = await di.resolve(Test[str])
+
+    assert isinstance(instance, Test)
+    assert instance.t == str
