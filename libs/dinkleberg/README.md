@@ -12,3 +12,8 @@ pip install dinkleberg
 
 uv add dinkleberg
 ```
+
+## Documentation
+
+Visit the GitHub repository for detailed documentation and
+examples: [dinkleberg on GitHub](https://github.com/DavidVollmers/dinkleberg/blob/main/README.md)

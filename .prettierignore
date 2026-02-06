@@ -6,3 +6,4 @@
 *.lock
 .gitkeep
 *.py
+*.txt

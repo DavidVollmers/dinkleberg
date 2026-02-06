@@ -1,6 +1,6 @@
 [project]
 name = "dinkleberg-fastapi"
-version = "0.3.1"
+version = "1.0.0"
 description = "FastAPI integrations for dinkleberg."
 requires-python = ">=3.13"
 keywords = ["dependency", "package-management", "automation", "fastapi"]
@@ -15,7 +15,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/DavidVollmers/dinkleberg"
-Documentation = "https://github.com/DavidVollmers/dinkleberg/blob/main/libs/dinkleberg/README.md"
+Documentation = "https://github.com/DavidVollmers/dinkleberg/blob/main/README.md"
 Repository = "https://github.com/DavidVollmers/dinkleberg.git"
 Issues = "https://github.com/DavidVollmers/dinkleberg/issues"
 Changelog = "https://github.com/DavidVollmers/dinkleberg/blob/main/CHANGELOG.md"

@@ -1,6 +1,6 @@
 [project]
 name = "dinkleberg"
-version = "0.3.8"
+version = "1.0.0"
 description = "Your friendly neighbour when it comes to dependency management."
 requires-python = ">=3.13"
 readme = "README.md"
@@ -25,7 +25,7 @@ fastapi = [
 
 [project.urls]
 Homepage = "https://github.com/DavidVollmers/dinkleberg"
-Documentation = "https://github.com/DavidVollmers/dinkleberg/blob/main/libs/dinkleberg/README.md"
+Documentation = "https://github.com/DavidVollmers/dinkleberg/blob/main/README.md"
 Repository = "https://github.com/DavidVollmers/dinkleberg.git"
 Issues = "https://github.com/DavidVollmers/dinkleberg/issues"
 Changelog = "https://github.com/DavidVollmers/dinkleberg/blob/main/CHANGELOG.md"
