@@ -244,61 +244,70 @@ class DependencyConfigurator(DependencyScope):
 
         return wrapped_instance
 
+    async def _batch_resolve(self, requests: list[tuple[str, type, dict]]) -> dict:
+        results = {}
+        tasks = []
+        task_names = []
+
+        for name, t, kwargs in requests:
+            singleton = self._lookup_singleton(t)
+            if singleton is not None:
+                results[name] = singleton
+                continue
+
+            task_names.append(name)
+            tasks.append(self.resolve(t, **kwargs))
+
+        if tasks:
+            resolved_values = await asyncio.gather(*tasks)
+            results.update(zip(task_names, resolved_values))
+
+        return results
+
     async def _resolve_factory_kwargs(self, factory: Callable, kwargs: dict, generic_map: dict = None) -> dict:
         params = get_static_params(factory)
 
-        factory_kwargs = {}
-        resolve_tasks = []
-        resolve_names = []
+        final_kwargs = {}
+        requests = []
 
         for param in params:
             name = param.name
             ann = param.annotation
 
             if name in kwargs:
-                factory_kwargs[name] = kwargs[name]
+                final_kwargs[name] = kwargs[name]
                 continue
 
             if ann is inspect.Parameter.empty:
                 continue
 
+            resolve_type = ann
             if generic_map:
                 if get_origin(ann) is type:
                     arg = get_args(ann)[0]
                     if arg in generic_map:
-                        factory_kwargs[name] = generic_map[arg]
+                        final_kwargs[name] = generic_map[arg]
                         continue
 
                 if ann in generic_map:
-                    actual_type = generic_map[ann]
-                    resolve_names.append(name)
-                    resolve_tasks.append(self.resolve(actual_type))
-                    continue
+                    resolve_type = generic_map[ann]
 
-            if is_builtin_type(ann):
+            if is_builtin_type(resolve_type):
                 continue
 
-            singleton = self._lookup_singleton(ann)
-            if singleton is not None:
-                factory_kwargs[name] = singleton
-                continue
+            requests.append((name, resolve_type, {}))
 
-            resolve_names.append(name)
-            resolve_tasks.append(self.resolve(ann))
+        resolved_deps = await self._batch_resolve(requests)
+        final_kwargs.update(resolved_deps)
 
-        if resolve_tasks:
-            results = await asyncio.gather(*resolve_tasks)
-            factory_kwargs.update(zip(resolve_names, results))
-
-        return factory_kwargs
+        return final_kwargs
 
     async def _resolve_kwargs(self, signature: Signature, name: str, args: tuple, kwargs: dict,
                               dep_params: Mapping[str, inspect.Parameter]) -> dict:
         bound_args = signature.bind_partial(*args, **kwargs)
         actual_kwargs = kwargs.copy()
 
-        tasks = []
-        task_param_names = []
+        requests = []
 
         for p_name, p_param in dep_params.items():
             if p_name in bound_args.arguments:
@@ -306,22 +315,15 @@ class DependencyConfigurator(DependencyScope):
 
             ann = p_param.annotation
             if ann is inspect.Parameter.empty:
-                raise TypeError(f'Parameter "{p_name}" in {func_name} is marked as a Dependency but lacks a type hint.')
+                raise TypeError(f'Parameter "{p_name}" in {func_name} ...')
 
             dep_kwargs = p_param.default._kwargs
             merged_kwargs = {**dep_kwargs, **kwargs}
 
-            singleton = self._lookup_singleton(ann)
-            if singleton is not None:
-                actual_kwargs[p_name] = singleton
-                continue
+            requests.append((p_name, ann, merged_kwargs))
 
-            task_param_names.append(p_name)
-            tasks.append(self.resolve(ann, **merged_kwargs))
-
-        if tasks:
-            results = await asyncio.gather(*tasks)
-            actual_kwargs.update(zip(task_param_names, results))
+        resolved_deps = await self._batch_resolve(requests)
+        actual_kwargs.update(resolved_deps)
 
         return actual_kwargs
 
