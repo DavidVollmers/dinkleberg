@@ -278,14 +278,17 @@ class DependencyConfigurator(DependencyScope):
             if is_builtin_type(ann):
                 continue
 
+            singleton = self._lookup_singleton(ann)
+            if singleton is not None:
+                factory_kwargs[name] = singleton
+                continue
+
             resolve_names.append(name)
             resolve_tasks.append(self.resolve(ann))
 
         if resolve_tasks:
-            # TODO optimistic synchronous resolution
             results = await asyncio.gather(*resolve_tasks)
-            resolved_deps = dict(zip(resolve_names, results))
-            factory_kwargs.update(resolved_deps)
+            factory_kwargs.update(zip(resolve_names, results))
 
         return factory_kwargs
 
@@ -294,21 +297,31 @@ class DependencyConfigurator(DependencyScope):
         bound_args = signature.bind_partial(*args, **kwargs)
         actual_kwargs = kwargs.copy()
 
-        params_to_resolve = []
-        for p_name, p_obj in dep_params.items():
-            if p_name not in bound_args.arguments:
-                if p_obj.annotation is inspect.Parameter.empty:
-                    raise TypeError(f'Parameter "{p_name}" in {name} is marked as a Dependency but lacks a type hint.')
-                params_to_resolve.append((p_name, p_obj.annotation))
+        tasks = []
+        task_param_names = []
 
-        if not params_to_resolve:
-            return actual_kwargs
+        for p_name, p_param in dep_params.items():
+            if p_name in bound_args.arguments:
+                continue
 
-        names, types = zip(*params_to_resolve)
-        # TODO optimistic synchronous resolution
-        resolved_values = await asyncio.gather(*(self.resolve(t, **kwargs) for t in types))
+            ann = p_param.annotation
+            if ann is inspect.Parameter.empty:
+                raise TypeError(f'Parameter "{p_name}" in {func_name} is marked as a Dependency but lacks a type hint.')
 
-        actual_kwargs.update(dict(zip(names, resolved_values)))
+            dep_kwargs = p_param.default._kwargs
+            merged_kwargs = {**dep_kwargs, **kwargs}
+
+            singleton = self._lookup_singleton(ann)
+            if singleton is not None:
+                actual_kwargs[p_name] = singleton
+                continue
+
+            task_param_names.append(p_name)
+            tasks.append(self.resolve(ann, **merged_kwargs))
+
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            actual_kwargs.update(zip(task_param_names, results))
 
         return actual_kwargs
 

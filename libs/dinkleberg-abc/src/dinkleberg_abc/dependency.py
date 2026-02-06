@@ -1,2 +1,3 @@
 class Dependency:
-    pass
+    def __init__(self, **kwargs):
+        self._kwargs = kwargs
