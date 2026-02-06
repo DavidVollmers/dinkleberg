@@ -1,6 +1,6 @@
 [project]
 name = "dinkleberg-fastapi"
-version = "0.3.0"
+version = "0.3.1"
 description = "FastAPI integrations for dinkleberg."
 requires-python = ">=3.13"
 keywords = ["dependency", "package-management", "automation", "fastapi"]

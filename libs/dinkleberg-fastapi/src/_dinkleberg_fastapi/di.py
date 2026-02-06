@@ -19,8 +19,8 @@ async def request_scope(request: Request):
         await scope.close()
 
 
-def di[T](t: type[T]) -> T:
+def di[T](t: type[T], **kwargs) -> T:
     async def dependable(scope: DependencyScope = Depends(request_scope)):
-        return await scope.resolve(t)
+        return await scope.resolve(t, **kwargs)
 
     return Depends(dependable)
