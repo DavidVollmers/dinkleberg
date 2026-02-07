@@ -159,7 +159,7 @@ class DependencyConfigurator(DependencyScope):
 
             return self._wrap_func(t)
 
-        if t == DependencyScope:
+        if t == DependencyScope or t == DependencyConfigurator:
             return self._configure_instance(t, self)
 
         singleton = self._lookup_singleton(t)

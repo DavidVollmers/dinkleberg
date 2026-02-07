@@ -1,5 +1,8 @@
 import pytest
 
+from dinkleberg import DependencyConfigurator
+from dinkleberg_abc import DependencyScope
+
 
 class TestClass:
     pass
@@ -49,3 +52,12 @@ async def test_transient_nested_dependencies(di):
     svc = await di.resolve(Service)
 
     assert svc.run() == 'data'
+
+
+@pytest.mark.asyncio
+async def test_resolve_container(di):
+    di1 = await di.resolve(DependencyConfigurator)
+    di2 = await di.resolve(DependencyScope)
+
+    assert di is di1
+    assert di1 is di2
