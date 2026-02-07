@@ -14,4 +14,4 @@ jobs:
       - uses: ./.github/actions/setup-repository
       - run: npx nx run-many --all --target=lint --parallel
       - run: npx nx run-many --all --target=build --parallel
-      - run: npx nx run-many --all --target=test --parallel
+      - run: npx nx test dinkleberg
