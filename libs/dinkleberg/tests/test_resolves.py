@@ -1,5 +1,3 @@
-from typing import AsyncGenerator
-
 import pytest
 
 

@@ -73,7 +73,8 @@ class DependencyConfigurator(DependencyScope):
 
         if lifetime == 'singleton' and self._parent is not None:
             raise RuntimeError(
-                'Singleton dependencies, which are not instances, can only be registered in the root DependencyConfigurator.')
+                'Singleton dependencies, which are not instances, '
+                'can only be registered in the root DependencyConfigurator.')
 
         if i is not None:
             if is_builtin_type(i):
@@ -229,7 +230,8 @@ class DependencyConfigurator(DependencyScope):
                     raise RuntimeError(f'Generator {t} yielded another generator. Nested generators are not supported.')
                 else:
                     raise RuntimeError(
-                        f'Callable {t} returned a generator. This is most likely due to an invalid dependency registration.')
+                        f'Callable {t} returned a generator. '
+                        f'This is most likely due to an invalid dependency registration.')
             finally:
                 await instance.aclose()
 
@@ -315,8 +317,9 @@ class DependencyConfigurator(DependencyScope):
 
             ann = p_param.annotation
             if ann is inspect.Parameter.empty:
-                raise TypeError(f'Parameter "{p_name}" in {func_name} ...')
+                raise TypeError(f'Parameter "{p_name}" in {name} ...')
 
+            # noinspection PyProtectedMember
             dep_kwargs = p_param.default._kwargs
             merged_kwargs = {**dep_kwargs, **kwargs}
 

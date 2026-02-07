@@ -42,11 +42,13 @@ def get_methods_to_wrap(cls: type) -> tuple[str, ...]:
     methods_to_wrap = []
 
     for name in dir(cls):
-        if name.startswith('_'): continue
+        if name.startswith('_'):
+            continue
 
         try:
             attr = getattr(cls, name)
-            if not inspect.isfunction(attr): continue
+            if not inspect.isfunction(attr):
+                continue
 
             sig = get_signature(attr)
             for param in sig.parameters.values():
