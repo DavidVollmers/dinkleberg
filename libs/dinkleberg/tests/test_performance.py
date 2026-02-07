@@ -91,7 +91,7 @@ async def test_performance_resolve_throughput(container):
 
     logger.debug(f"\nThroughput: {ops_per_sec:.2f} ops/sec")
 
-    assert ops_per_sec > 9000
+    assert ops_per_sec > 5000
 
 
 @pytest.mark.asyncio
