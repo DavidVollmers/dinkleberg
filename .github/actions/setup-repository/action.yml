@@ -1,0 +1,17 @@
+name: Setup Repository
+description: Setup the repository so that subsequent steps can run
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version-file: .nvmrc
+        registry-url: https://registry.npmjs.org
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - uses: astral-sh/setup-uv@v6
+    - run: npm ci
+      shell: bash
+    - run: uv sync --locked --all-packages --dev
+      shell: bash

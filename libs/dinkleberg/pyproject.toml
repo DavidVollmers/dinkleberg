@@ -2,7 +2,7 @@
 name = "dinkleberg"
 version = "1.0.1"
 description = "Your friendly neighbour when it comes to dependency management."
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 readme = "README.md"
 classifiers = [
     "Development Status :: 3 - Alpha",

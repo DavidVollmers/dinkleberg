@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-repository
+      - run: npx nx run-many --all --target=lint --parallel
+      - run: npx nx run-many --all --target=build --parallel
+      - run: npx nx run-many --all --target=test --parallel

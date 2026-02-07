@@ -7,3 +7,4 @@
 .gitkeep
 *.py
 *.txt
+.nvmrc

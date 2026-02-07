@@ -2,7 +2,7 @@
 name = "dinkleberg-abc"
 version = "1.0.0"
 description = "Abstractions for dinkleberg."
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 keywords = ["dependency", "package-management", "automation", "abstractions"]
 dependencies = []
 

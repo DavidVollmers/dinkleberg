@@ -408,15 +408,16 @@ class DependencyConfigurator(DependencyScope):
         ...
 
     @overload
-    def add_singleton[I](self, *, generator: Callable[..., AsyncGenerator[I]], override: bool = False):
+    def add_singleton[I](self, *, generator: Callable[..., AsyncGenerator[I, None]], override: bool = False):
         ...
 
     @overload
-    def add_singleton[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]], override: bool = False):
+    def add_singleton[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I, None]],
+                            override: bool = False):
         ...
 
     def add_singleton[T, I](self, *, t: type[T] = None, i: type[I] = None,
-                            generator: Callable[..., AsyncGenerator[I]] = None,
+                            generator: Callable[..., AsyncGenerator[I, None]] = None,
                             callable: Callable[..., I] = None, instance: I = None, override: bool = False):
         self._raise_if_closed()
 
@@ -462,15 +463,16 @@ class DependencyConfigurator(DependencyScope):
         ...
 
     @overload
-    def add_scoped[I](self, *, generator: Callable[..., AsyncGenerator[I]], override: bool = False):
+    def add_scoped[I](self, *, generator: Callable[..., AsyncGenerator[I, None]], override: bool = False):
         ...
 
     @overload
-    def add_scoped[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I]], override: bool = False):
+    def add_scoped[T, I](self, *, t: type[T], generator: Callable[..., AsyncGenerator[I, None]],
+                         override: bool = False):
         ...
 
     def add_scoped[T, I](self, *, t: type[T] = None, i: type[I] = None,
-                         generator: Callable[..., AsyncGenerator[I]] = None, callable: Callable[..., I] = None,
+                         generator: Callable[..., AsyncGenerator[I, None]] = None, callable: Callable[..., I] = None,
                          override: bool = False):
         self._raise_if_closed()
         self._add('scoped', t=t, i=i, generator=generator, callable=callable, override=override)
