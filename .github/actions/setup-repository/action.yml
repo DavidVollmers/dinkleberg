@@ -13,5 +13,7 @@ runs:
     - uses: astral-sh/setup-uv@v6
     - run: npm ci
       shell: bash
+    - run: uv lock
+      shell: bash
     - run: uv sync --locked --all-packages --dev
       shell: bash
