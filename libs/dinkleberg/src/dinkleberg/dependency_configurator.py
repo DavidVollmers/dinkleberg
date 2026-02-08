@@ -153,7 +153,8 @@ class DependencyConfigurator(DependencyScope):
         self._raise_if_closed()
 
         origin = get_origin(t)
-        if not inspect.isclass(t) and origin is None:
+        is_new_type = hasattr(t, '__supertype__')
+        if not inspect.isclass(t) and origin is None and not is_new_type:
             if not inspect.isfunction(t):
                 raise TypeError(f'Cannot resolve type {t}. Only classes and functions are supported.')
 
