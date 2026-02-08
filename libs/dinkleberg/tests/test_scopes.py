@@ -66,3 +66,26 @@ async def test_scope_isolation(di):
     assert isinstance(s1, Session)
     assert isinstance(s2, Session)
     assert s1 is not s2
+
+
+@pytest.mark.asyncio
+async def test_scope_context_manager(di):
+    close_counter = 0
+
+    async def generator():
+        yield TestClass()
+        nonlocal close_counter
+        close_counter += 1
+
+    di.add_scoped(t=TestClass, generator=generator)
+
+    async with di.scope() as scope:
+        instance1 = await scope.resolve(TestClass)
+        assert isinstance(instance1, TestClass)
+
+        instance2 = await scope.resolve(TestClass)
+        assert isinstance(instance2, TestClass)
+
+        assert instance1 is instance2
+
+    assert close_counter == 1

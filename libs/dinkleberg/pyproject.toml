@@ -1,6 +1,6 @@
 [project]
 name = "dinkleberg"
-version = "1.1.1"
+version = "1.1.2"
 description = "Your friendly neighbour when it comes to dependency management."
 requires-python = ">=3.12"
 readme = "README.md"
@@ -16,7 +16,7 @@ classifiers = [
 ]
 keywords = ["dependency", "package-management", "automation"]
 dependencies = [
-    "dinkleberg-abc>=1.1.0",
+    "dinkleberg-abc>=1.1.1",
 ]
 
 [project.optional-dependencies]

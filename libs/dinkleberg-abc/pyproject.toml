@@ -1,6 +1,6 @@
 [project]
 name = "dinkleberg-abc"
-version = "1.1.0"
+version = "1.1.1"
 description = "Abstractions for dinkleberg."
 requires-python = ">=3.12"
 keywords = ["dependency", "package-management", "automation", "abstractions"]
