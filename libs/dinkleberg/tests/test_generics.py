@@ -1,4 +1,5 @@
 import pytest
+from pydantic import BaseModel
 
 
 @pytest.mark.asyncio
@@ -43,18 +44,21 @@ async def test_resolve_generic_class_with_type_param(di):
 
 @pytest.mark.asyncio
 async def test_resolve_generic_class_with_callable(di):
-    class Test[T]:
+    class Test[T: BaseModel]:
         def __init__(self, t: type[T], value: str):
             self.t = t
             self.value = value
 
-    def callable[T](t: type[T]) -> Test[T]:
+    def callable[T: BaseModel](t: type[T]) -> Test[T]:
         return Test(t, value='test')
 
     di.add_transient(t=Test, callable=callable)
 
-    instance = await di.resolve(Test[str])
+    class TestModel(BaseModel):
+        name: str
+
+    instance = await di.resolve(Test[TestModel])
 
     assert isinstance(instance, Test)
-    assert instance.t == str
+    assert instance.t == TestModel
     assert instance.value == 'test'

@@ -89,3 +89,30 @@ async def test_scope_context_manager(di):
         assert instance1 is instance2
 
     assert close_counter == 1
+
+
+@pytest.mark.asyncio
+async def test_singleton_in_scope(di):
+    close_counter = 0
+
+    async def generator():
+        yield TestClass()
+        nonlocal close_counter
+        close_counter += 1
+
+    di.add_singleton(t=TestClass, generator=generator)
+
+    instance1 = await di.resolve(TestClass)
+    assert isinstance(instance1, TestClass)
+
+    async with di.scope() as scope:
+        instance2 = await scope.resolve(TestClass)
+        assert isinstance(instance2, TestClass)
+
+        assert instance1 is instance2
+
+    assert close_counter == 0
+
+    await di.close()
+
+    assert close_counter == 1
