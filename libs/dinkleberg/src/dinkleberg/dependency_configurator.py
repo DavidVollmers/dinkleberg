@@ -8,7 +8,8 @@ from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, 
 
 from dinkleberg_abc import DependencyScope, Dependency
 from .descriptor import Descriptor, Lifetime
-from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap
+from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap, \
+    get_cached_type_hints
 
 logger = logging.getLogger(__name__)
 
@@ -170,12 +171,12 @@ class DependencyConfigurator(DependencyScope):
             return self._configure_instance(t, self._scoped_instances[t])
 
         descriptor = self._descriptors.get(t)
-        if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
+        is_origin_class = inspect.isclass(origin)
+        if descriptor is None and is_origin_class:
+            # noinspection PyTypeChecker
+            descriptor = self._descriptors.get(origin)
 
-            is_origin_class = inspect.isclass(origin)
-            if descriptor is None and is_origin_class:
-                # noinspection PyTypeChecker
-                descriptor = self._descriptors.get(origin)
+        if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
 
             generic_map = None
             if descriptor is None:
@@ -210,7 +211,12 @@ class DependencyConfigurator(DependencyScope):
 
             is_generator = descriptor['generator'] is not None
             factory = descriptor['generator'] or descriptor['callable']
-            factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs)
+
+            generic_map = None
+            if is_origin_class:
+                generic_map = self._infer_return_generics(factory, t)
+
+            factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map)
 
         if is_generator:
             generator = factory(**factory_kwargs)
@@ -246,6 +252,25 @@ class DependencyConfigurator(DependencyScope):
             self._scoped_instances[t] = wrapped_instance
 
         return wrapped_instance
+
+    @staticmethod
+    def _infer_return_generics(factory: Callable, requested_type: type) -> dict:
+        hints = get_cached_type_hints(factory)
+        return_hint = hints.get('return')
+
+        if not return_hint:
+            return {}
+
+        req_origin = get_origin(requested_type) or requested_type
+        ret_origin = get_origin(return_hint) or return_hint
+
+        if req_origin != ret_origin:
+            return {}
+
+        req_args = get_args(requested_type)
+        ret_args = get_args(return_hint)
+
+        return dict(zip(ret_args, req_args))
 
     async def _batch_resolve(self, requests: list[tuple[str, type, dict]]) -> dict:
         results = {}

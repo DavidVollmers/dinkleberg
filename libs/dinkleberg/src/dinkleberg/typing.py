@@ -2,7 +2,7 @@ import abc
 import inspect
 from functools import lru_cache
 from inspect import Parameter, Signature
-from typing import Callable, get_origin
+from typing import Callable, get_origin, get_type_hints
 
 from dinkleberg_abc import Dependency
 
@@ -59,3 +59,12 @@ def get_methods_to_wrap(cls: type) -> tuple[str, ...]:
             continue
 
     return tuple(methods_to_wrap)
+
+
+@lru_cache(maxsize=4096)
+def get_cached_type_hints(obj: Callable) -> dict:
+    # noinspection PyBroadException
+    try:
+        return get_type_hints(obj, include_extras=True)
+    except Exception:
+        return {}
