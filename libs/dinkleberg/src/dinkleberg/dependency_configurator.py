@@ -7,7 +7,9 @@ from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
 from dinkleberg_abc import DependencyScope, Dependency
+from .dependency_resolution_exception import DependencyResolutionException
 from .descriptor import Descriptor, Lifetime
+from .resolution_step import ResolutionStep
 from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap, \
     get_cached_type_hints
 
@@ -148,110 +150,125 @@ class DependencyConfigurator(DependencyScope):
             return self._parent._lookup_singleton(t)
         return None
 
-    # TODO circular dependency detection
-    # TODO singleton race condition prevention (async.Lock)
     async def resolve[T](self, t: type[T] | Callable, **kwargs) -> T:
+        return await self._resolve(t, chain=(), **kwargs)
+
+    # TODO singleton race condition prevention (async.Lock)
+    async def _resolve[T](self, t: type[T] | Callable, chain: tuple[ResolutionStep, ...], **kwargs) -> T:
         self._raise_if_closed()
 
-        origin = get_origin(t)
-        is_new_type = hasattr(t, '__supertype__')
-        if not inspect.isclass(t) and origin is None and not is_new_type:
-            if not inspect.isfunction(t):
-                raise TypeError(f'Cannot resolve type {t}. Only classes and functions are supported.')
+        if any(step.t == t for step in chain):
+            cycle_path = ' -> '.join(str(step) for step in chain)
+            raise RecursionError(f'Circular dependency detected: {cycle_path} -> {t.__name__}')
 
-            return self._wrap_func(t)
+        current_chain = chain + (ResolutionStep(t=t, kwargs=kwargs),)
 
-        if t == DependencyScope or t == DependencyConfigurator:
-            return self._configure_instance(t, self)
+        try:
+            origin = get_origin(t)
+            is_new_type = hasattr(t, '__supertype__')
+            if not inspect.isclass(t) and origin is None and not is_new_type:
+                if not inspect.isfunction(t):
+                    raise TypeError(f'Cannot resolve type {t}. Only classes and functions are supported.')
 
-        singleton = self._lookup_singleton(t)
-        if singleton is not None:
-            return singleton
-        if t in self._scoped_instances:
-            return self._configure_instance(t, self._scoped_instances[t])
+                return self._wrap_func(t, current_chain)
 
-        descriptor = self._descriptors.get(t)
-        is_origin_class = inspect.isclass(origin)
-        if descriptor is None and is_origin_class:
-            # noinspection PyTypeChecker
-            descriptor = self._descriptors.get(origin)
+            if t == DependencyScope or t == DependencyConfigurator:
+                return self._configure_instance(t, self)
 
-        if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
+            singleton = self._lookup_singleton(t)
+            if singleton is not None:
+                return singleton
+            if t in self._scoped_instances:
+                return self._configure_instance(t, self._scoped_instances[t])
 
-            generic_map = None
-            if descriptor is None:
-                if is_builtin_type(t):
-                    raise TypeError(f'Cannot resolve built-in type {t} without explicit registration.')
+            descriptor = self._descriptors.get(t)
+            is_origin_class = inspect.isclass(origin)
+            if descriptor is None and is_origin_class:
+                # noinspection PyTypeChecker
+                descriptor = self._descriptors.get(origin)
 
-                if origin is not None:
-                    raise TypeError(f'Cannot resolve generic type {t} without explicit registration.')
+            if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
 
-                if is_abstract(t):
-                    raise TypeError(f'Cannot resolve abstract class {t} without explicit registration.')
+                generic_map = None
+                if descriptor is None:
+                    if is_builtin_type(t):
+                        raise TypeError(f'Cannot resolve built-in type {t} without explicit registration.')
 
-                factory = t
-            elif is_origin_class:
-                factory = descriptor['implementation'] or origin
+                    if origin is not None:
+                        raise TypeError(f'Cannot resolve generic type {t} without explicit registration.')
 
-                type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
-                t_args = get_args(t)
-                if type_params and t_args:
-                    generic_map = dict(zip(type_params, t_args))
-            else:
-                factory = descriptor['implementation'] or t
+                    if is_abstract(t):
+                        raise TypeError(f'Cannot resolve abstract class {t} without explicit registration.')
 
-            is_generator = False
-            lifetime = descriptor['lifetime'] if descriptor else 'transient'
-            factory_kwargs = await self._resolve_factory_kwargs(factory.__init__, kwargs, generic_map)
-        else:
-            lifetime = descriptor['lifetime']
-            if lifetime == 'singleton' and self._parent:
-                # we need to resolve singleton from the root scope
-                return await self._parent.resolve(t, **kwargs)
+                    factory = t
+                elif is_origin_class:
+                    factory = descriptor['implementation'] or origin
 
-            is_generator = descriptor['generator'] is not None
-            factory = descriptor['generator'] or descriptor['callable']
-
-            generic_map = None
-            if is_origin_class:
-                generic_map = self._infer_return_generics(factory, t)
-
-            factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map)
-
-        if is_generator:
-            generator = factory(**factory_kwargs)
-            try:
-                instance = await generator.__anext__()
-            except StopAsyncIteration:
-                raise RuntimeError(f'Generator {t} did not yield any value.')
-
-            self._active_generators.append(generator)
-        elif asyncio.iscoroutinefunction(factory):
-            instance = await factory(**factory_kwargs)
-        else:
-            instance = factory(**factory_kwargs)
-
-        if isinstance(instance, AsyncGenerator):
-            try:
-                if is_generator:
-                    raise RuntimeError(f'Generator {t} yielded another generator. Nested generators are not supported.')
+                    type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
+                    t_args = get_args(t)
+                    if type_params and t_args:
+                        generic_map = dict(zip(type_params, t_args))
                 else:
-                    raise RuntimeError(
-                        f'Callable {t} returned a generator. '
-                        f'This is most likely due to an invalid dependency registration.')
-            finally:
-                await instance.aclose()
+                    factory = descriptor['implementation'] or t
 
-        configured_instance = self._configure_instance(t, instance)
+                is_generator = False
+                lifetime = descriptor['lifetime'] if descriptor else 'transient'
+                factory_kwargs = await self._resolve_factory_kwargs(factory.__init__, kwargs, generic_map,
+                                                                    current_chain)
+            else:
+                lifetime = descriptor['lifetime']
+                if lifetime == 'singleton' and self._parent:
+                    # we need to resolve singleton from the root scope
+                    return await self._parent._resolve(t, chain, **kwargs)
 
-        wrapped_instance = self._wrap_instance(t, configured_instance)
+                is_generator = descriptor['generator'] is not None
+                factory = descriptor['generator'] or descriptor['callable']
 
-        if lifetime == 'singleton':
-            self._singleton_instances[t] = wrapped_instance
-        elif lifetime == 'scoped':
-            self._scoped_instances[t] = wrapped_instance
+                generic_map = None
+                if is_origin_class:
+                    generic_map = self._infer_return_generics(factory, t)
 
-        return wrapped_instance
+                factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map, current_chain)
+
+            if is_generator:
+                generator = factory(**factory_kwargs)
+                try:
+                    instance = await generator.__anext__()
+                except StopAsyncIteration:
+                    raise RuntimeError(f'Generator {t} did not yield any value.')
+
+                self._active_generators.append(generator)
+            elif asyncio.iscoroutinefunction(factory):
+                instance = await factory(**factory_kwargs)
+            else:
+                instance = factory(**factory_kwargs)
+
+            if isinstance(instance, AsyncGenerator):
+                try:
+                    if is_generator:
+                        raise RuntimeError(
+                            f'Generator {t} yielded another generator. Nested generators are not supported.')
+                    else:
+                        raise RuntimeError(
+                            f'Callable {t} returned a generator. '
+                            f'This is most likely due to an invalid dependency registration.')
+                finally:
+                    await instance.aclose()
+
+            configured_instance = self._configure_instance(t, instance)
+
+            wrapped_instance = self._wrap_instance(t, configured_instance, current_chain)
+
+            if lifetime == 'singleton':
+                self._singleton_instances[t] = wrapped_instance
+            elif lifetime == 'scoped':
+                self._scoped_instances[t] = wrapped_instance
+
+            return wrapped_instance
+        except DependencyResolutionException:
+            raise
+        except Exception as e:
+            raise DependencyResolutionException(current_chain, e) from e
 
     @staticmethod
     def _infer_return_generics(factory: Callable, requested_type: type) -> dict:
@@ -272,7 +289,7 @@ class DependencyConfigurator(DependencyScope):
 
         return dict(zip(ret_args, req_args))
 
-    async def _batch_resolve(self, requests: list[tuple[str, type, dict]]) -> dict:
+    async def _batch_resolve(self, requests: list[tuple[str, type, dict]], chain: tuple[ResolutionStep, ...]) -> dict:
         results = {}
         tasks = []
         task_names = []
@@ -284,7 +301,7 @@ class DependencyConfigurator(DependencyScope):
                 continue
 
             task_names.append(name)
-            tasks.append(self.resolve(t, **kwargs))
+            tasks.append(self._resolve(t, chain, **kwargs))
 
         if tasks:
             resolved_values = await asyncio.gather(*tasks)
@@ -292,7 +309,8 @@ class DependencyConfigurator(DependencyScope):
 
         return results
 
-    async def _resolve_factory_kwargs(self, factory: Callable, kwargs: dict, generic_map: dict = None) -> dict:
+    async def _resolve_factory_kwargs(self, factory: Callable, kwargs: dict, generic_map: dict,
+                                      chain: tuple[ResolutionStep, ...]) -> dict:
         params = get_static_params(factory)
 
         final_kwargs = {}
@@ -325,13 +343,13 @@ class DependencyConfigurator(DependencyScope):
 
             requests.append((name, resolve_type, {}))
 
-        resolved_deps = await self._batch_resolve(requests)
+        resolved_deps = await self._batch_resolve(requests, chain)
         final_kwargs.update(resolved_deps)
 
         return final_kwargs
 
     async def _resolve_kwargs(self, signature: Signature, name: str, args: tuple, kwargs: dict,
-                              dep_params: Mapping[str, inspect.Parameter]) -> dict:
+                              dep_params: Mapping[str, inspect.Parameter], chain: tuple[ResolutionStep, ...]) -> dict:
         bound_args = signature.bind_partial(*args, **kwargs)
         actual_kwargs = kwargs.copy()
 
@@ -351,12 +369,12 @@ class DependencyConfigurator(DependencyScope):
 
             requests.append((p_name, ann, merged_kwargs))
 
-        resolved_deps = await self._batch_resolve(requests)
+        resolved_deps = await self._batch_resolve(requests, chain)
         actual_kwargs.update(resolved_deps)
 
         return actual_kwargs
 
-    def _wrap_func(self, func: Callable):
+    def _wrap_func(self, func: Callable, chain: tuple[ResolutionStep, ...]) -> Callable:
         signature = get_signature(func)
 
         dep_params = MappingProxyType({
@@ -373,7 +391,7 @@ class DependencyConfigurator(DependencyScope):
 
         @wraps(func)
         async def wrapped_func(*args, **kwargs):
-            new_kwargs = await self._resolve_kwargs(signature, func.__name__, args, kwargs, dep_params)
+            new_kwargs = await self._resolve_kwargs(signature, func.__name__, args, kwargs, dep_params, chain)
             return await func(*args, **new_kwargs)
 
         return wrapped_func
@@ -385,18 +403,19 @@ class DependencyConfigurator(DependencyScope):
         for configurator in self._configurators[t]:
             result = configurator(instance)
             if result is not None:
+                # TODO make sure new instances will be closed if originally registered via generator
                 instance = result
 
         return instance
 
     # TODO handle __slots__
-    def _wrap_instance(self, t: type, instance: object) -> object:
+    def _wrap_instance(self, t: type, instance: object, chain: tuple[ResolutionStep, ...]) -> object:
         if hasattr(instance, '__dinkleberg__') or is_builtin_type(t):
             return instance
 
         for name in get_methods_to_wrap(t):
             instance_method = getattr(instance, name)
-            wrapped = self._wrap_func(instance_method)
+            wrapped = self._wrap_func(instance_method, chain)
             if wrapped is not instance_method:
                 setattr(instance, name, wrapped)
 
@@ -464,7 +483,7 @@ class DependencyConfigurator(DependencyScope):
 
         configured_instance = self._configure_instance(t, instance)
 
-        wrapped_instance = self._wrap_instance(t, configured_instance)
+        wrapped_instance = self._wrap_instance(t, configured_instance, chain=())
 
         self._singleton_instances[t] = wrapped_instance
 
