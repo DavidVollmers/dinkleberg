@@ -206,7 +206,8 @@ class DependencyConfigurator(DependencyScope):
 
                     factory = t
                 elif descriptor['implementation'] is not None:
-                    return await self._resolve(descriptor['implementation'], current_chain, **kwargs)
+                    instance = await self._resolve(descriptor['implementation'], current_chain, **kwargs)
+                    return self._return_instance(t, descriptor['lifetime'], instance, current_chain)
                 elif is_origin_class:
                     factory = origin
 
@@ -265,16 +266,7 @@ class DependencyConfigurator(DependencyScope):
                 finally:
                     await instance.aclose()
 
-            configured_instance = self._configure_instance(t, instance)
-
-            wrapped_instance = self._wrap_instance(t, configured_instance, current_chain)
-
-            if lifetime == 'singleton':
-                self._singleton_instances[t] = wrapped_instance
-            elif lifetime == 'scoped':
-                self._scoped_instances[t] = wrapped_instance
-
-            return wrapped_instance
+            return self._return_instance(t, lifetime, instance, current_chain)
         except DependencyResolutionError:
             raise
         except RecursionError:
@@ -440,6 +432,19 @@ class DependencyConfigurator(DependencyScope):
             pass
 
         return instance
+
+    def _return_instance(self, t: type, lifetime: Lifetime, instance: object,
+                         current_chain: tuple[ResolutionStep, ...]) -> object:
+        configured_instance = self._configure_instance(t, instance)
+
+        wrapped_instance = self._wrap_instance(t, configured_instance, current_chain)
+
+        if lifetime == 'singleton':
+            self._singleton_instances[t] = wrapped_instance
+        elif lifetime == 'scoped':
+            self._scoped_instances[t] = wrapped_instance
+
+        return wrapped_instance
 
     @overload
     def add_singleton[I](self, *, instance: I, override: bool = False):

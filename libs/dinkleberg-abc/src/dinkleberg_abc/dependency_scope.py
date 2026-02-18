@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 
 class DependencyScope(ABC):
+    __dinkleberg__: bool = True
+
     async def __aenter__(self) -> 'DependencyScope':
         return self
 
