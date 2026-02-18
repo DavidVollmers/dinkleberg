@@ -80,3 +80,32 @@ async def test_resolve_by_abstraction(di):
     d = await di.resolve(D)
 
     assert d.perform() == 'B did something'
+
+
+@pytest.mark.asyncio
+async def test_resolve_by_abstraction_with_factory(di):
+    class A(ABC):
+        @abstractmethod
+        def do_something(self):
+            pass
+
+    class B(A):
+        def __init__(self, value):
+            self.value = value
+
+        def do_something(self):
+            return 'B did ' + self.value
+
+    class D:
+        def __init__(self, a: A):
+            self.a = a
+
+        def perform(self):
+            return self.a.do_something()
+
+    di.add_transient(t=B, callable=lambda: B('something'))
+    di.add_transient(t=A, i=B)
+
+    d = await di.resolve(D)
+
+    assert d.perform() == 'B did something'

@@ -6,8 +6,6 @@ from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
-from pyexpat.errors import messages
-
 from dinkleberg_abc import DependencyScope, Dependency
 from .dependency_resolution_error import DependencyResolutionError
 from .descriptor import Descriptor, Lifetime
@@ -207,15 +205,17 @@ class DependencyConfigurator(DependencyScope):
                                                         message=f'Cannot resolve abstract class {t} without explicit registration.')
 
                     factory = t
+                elif descriptor['implementation'] is not None:
+                    return await self._resolve(descriptor['implementation'], current_chain, **kwargs)
                 elif is_origin_class:
-                    factory = descriptor['implementation'] or origin
+                    factory = origin
 
                     type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
                     t_args = get_args(t)
                     if type_params and t_args:
                         generic_map = dict(zip(type_params, t_args))
                 else:
-                    factory = descriptor['implementation'] or t
+                    factory = t
 
                 is_generator = False
                 lifetime = descriptor['lifetime'] if descriptor else 'transient'
@@ -237,6 +237,7 @@ class DependencyConfigurator(DependencyScope):
                 factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map, current_chain)
 
             if is_generator:
+                # noinspection PyCallingNonCallable
                 generator = factory(**factory_kwargs)
                 try:
                     instance = await generator.__anext__()
@@ -245,8 +246,10 @@ class DependencyConfigurator(DependencyScope):
 
                 self._active_generators.append(generator)
             elif asyncio.iscoroutinefunction(factory):
+                # noinspection PyCallingNonCallable
                 instance = await factory(**factory_kwargs)
             else:
+                # noinspection PyCallingNonCallable
                 instance = factory(**factory_kwargs)
 
             if isinstance(instance, AsyncGenerator):
