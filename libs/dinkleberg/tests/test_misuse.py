@@ -2,6 +2,8 @@ from typing import Union
 
 import pytest
 
+from dinkleberg import DependencyResolutionError
+
 
 class TestClass:
     pass
@@ -14,7 +16,7 @@ async def test_register_generator_as_callable(di):
 
     di.add_transient(t=TestClass, callable=generator)
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(TestClass)
 
     assert (f'Callable {TestClass} returned a generator. '
@@ -27,7 +29,7 @@ async def test_builtin_parameters(di):
         def __init__(self, value: str):
             self.value = value
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(Service)
 
     assert 'Service.__init__() missing 1 required positional argument: \'value\'' in str(exc_info.value)
@@ -55,7 +57,7 @@ async def test_resolve_union(di):
 
     union = Union[Test1, Test2]
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(union)
 
     assert f'Cannot resolve built-in type {union} without explicit registration.' in str(exc_info.value)

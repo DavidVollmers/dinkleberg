@@ -2,6 +2,8 @@ from typing import AsyncGenerator
 
 import pytest
 
+from dinkleberg import DependencyResolutionError
+
 
 @pytest.mark.asyncio
 async def test_generator_lifecycle(di):
@@ -36,7 +38,7 @@ async def test_generator_no_yield_failure(di):
 
     di.add_scoped(t=Empty, generator=empty_gen)
 
-    with pytest.raises(RuntimeError, match='did not yield any value'):
+    with pytest.raises(DependencyResolutionError, match='did not yield any value'):
         await di.resolve(Empty)
 
 

@@ -6,8 +6,10 @@ from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
+from pyexpat.errors import messages
+
 from dinkleberg_abc import DependencyScope, Dependency
-from .dependency_resolution_exception import DependencyResolutionException
+from .dependency_resolution_error import DependencyResolutionError
 from .descriptor import Descriptor, Lifetime
 from .resolution_step import ResolutionStep
 from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap, \
@@ -168,7 +170,8 @@ class DependencyConfigurator(DependencyScope):
             is_new_type = hasattr(t, '__supertype__')
             if not inspect.isclass(t) and origin is None and not is_new_type:
                 if not inspect.isfunction(t):
-                    raise TypeError(f'Cannot resolve type {t}. Only classes and functions are supported.')
+                    raise DependencyResolutionError(chain=current_chain,
+                                                    message=f'Cannot resolve type {t}. Only classes and functions are supported.')
 
                 return self._wrap_func(t, current_chain)
 
@@ -192,13 +195,16 @@ class DependencyConfigurator(DependencyScope):
                 generic_map = None
                 if descriptor is None:
                     if is_builtin_type(t):
-                        raise TypeError(f'Cannot resolve built-in type {t} without explicit registration.')
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Cannot resolve built-in type {t} without explicit registration.')
 
                     if origin is not None:
-                        raise TypeError(f'Cannot resolve generic type {t} without explicit registration.')
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Cannot resolve generic type {t} without explicit registration.')
 
                     if is_abstract(t):
-                        raise TypeError(f'Cannot resolve abstract class {t} without explicit registration.')
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Cannot resolve abstract class {t} without explicit registration.')
 
                     factory = t
                 elif is_origin_class:
@@ -235,7 +241,7 @@ class DependencyConfigurator(DependencyScope):
                 try:
                     instance = await generator.__anext__()
                 except StopAsyncIteration:
-                    raise RuntimeError(f'Generator {t} did not yield any value.')
+                    raise DependencyResolutionError(current_chain, message=f'Generator {t} did not yield any value.')
 
                 self._active_generators.append(generator)
             elif asyncio.iscoroutinefunction(factory):
@@ -246,12 +252,13 @@ class DependencyConfigurator(DependencyScope):
             if isinstance(instance, AsyncGenerator):
                 try:
                     if is_generator:
-                        raise RuntimeError(
-                            f'Generator {t} yielded another generator. Nested generators are not supported.')
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Generator {t} yielded another generator. '
+                                                                f'Nested generators are not supported.')
                     else:
-                        raise RuntimeError(
-                            f'Callable {t} returned a generator. '
-                            f'This is most likely due to an invalid dependency registration.')
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Callable {t} returned a generator. '
+                                                                f'This is most likely due to an invalid dependency registration.')
                 finally:
                     await instance.aclose()
 
@@ -265,10 +272,10 @@ class DependencyConfigurator(DependencyScope):
                 self._scoped_instances[t] = wrapped_instance
 
             return wrapped_instance
-        except DependencyResolutionException:
+        except DependencyResolutionError:
             raise
         except Exception as e:
-            raise DependencyResolutionException(current_chain, e) from e
+            raise DependencyResolutionError(current_chain, original_error=e) from e
 
     @staticmethod
     def _infer_return_generics(factory: Callable, requested_type: type) -> dict:
@@ -361,7 +368,9 @@ class DependencyConfigurator(DependencyScope):
 
             ann = p_param.annotation
             if ann is inspect.Parameter.empty:
-                raise TypeError(f'Parameter "{p_name}" in {name} ...')
+                raise DependencyResolutionError(chain,
+                                                message=f'Parameter "{p_name}" in {name} is missing a type annotation, '
+                                                        f'which is required for dependency resolution.')
 
             # noinspection PyProtectedMember
             dep_kwargs = p_param.default._kwargs

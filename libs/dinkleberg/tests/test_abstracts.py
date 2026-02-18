@@ -2,10 +2,12 @@ from abc import ABC, ABCMeta, abstractmethod
 
 import pytest
 
+from dinkleberg import DependencyResolutionError
+
 
 @pytest.mark.asyncio
 async def test_resolve_abc(di):
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(ABC)
 
     assert f'Cannot resolve abstract class {ABC} without explicit registration.' in str(exc_info.value)
@@ -18,7 +20,7 @@ async def test_resolve_abc_class(di):
         def method(self):
             pass
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(AbstractClass)
 
     assert f'Cannot resolve abstract class {AbstractClass} without explicit registration.' in str(exc_info.value)
@@ -40,7 +42,7 @@ async def test_resolve_abcmeta_class(di):
         def method(self):
             pass
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(DependencyResolutionError) as exc_info:
         await di.resolve(AbstractMetaClass)
 
     assert f'Cannot resolve abstract class {AbstractMetaClass} without explicit registration.' in str(exc_info.value)
