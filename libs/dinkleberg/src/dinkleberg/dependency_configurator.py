@@ -274,6 +274,8 @@ class DependencyConfigurator(DependencyScope):
             return wrapped_instance
         except DependencyResolutionError:
             raise
+        except RecursionError:
+            raise
         except Exception as e:
             raise DependencyResolutionError(current_chain, original_error=e) from e
 
