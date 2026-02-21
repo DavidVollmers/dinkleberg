@@ -1,4 +1,4 @@
-from typing import NewType
+from typing import NewType, Optional
 
 import pytest
 
@@ -20,3 +20,24 @@ async def test_new_type(di):
 
     resolved_instance_direct = await di.resolve(Session)
     assert resolved_instance_direct is not session_instance
+
+
+@pytest.mark.asyncio
+async def test_optional(di):
+    class Session:
+        pass
+
+    class App:
+        def __init__(self, session: Optional[Session] = None):
+            self.session = session
+
+    instance = await di.resolve(App)
+    assert isinstance(instance, App)
+    assert instance.session is None
+
+    singleton_instance = Session()
+    di.add_singleton(t=Session, instance=singleton_instance)
+
+    instance_with_session = await di.resolve(App)
+    assert isinstance(instance_with_session, App)
+    assert instance_with_session.session is singleton_instance

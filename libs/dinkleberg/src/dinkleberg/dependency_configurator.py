@@ -4,14 +4,14 @@ import logging
 from functools import wraps
 from inspect import Signature
 from types import MappingProxyType
-from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
+from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args, Union
 
 from dinkleberg_abc import DependencyScope, Dependency
 from .dependency_resolution_error import DependencyResolutionError
 from .descriptor import Descriptor, Lifetime
 from .resolution_step import ResolutionStep
 from .typing import get_static_params, is_builtin_type, is_abstract, get_signature, get_methods_to_wrap, \
-    get_cached_type_hints
+    get_cached_type_hints, is_type_optional
 
 logger = logging.getLogger(__name__)
 
@@ -293,15 +293,24 @@ class DependencyConfigurator(DependencyScope):
 
         return dict(zip(ret_args, req_args))
 
-    async def _batch_resolve(self, requests: list[tuple[str, type, dict]], chain: tuple[ResolutionStep, ...]) -> dict:
+    def _is_known_type(self, t: type) -> bool:
+        return t in self._descriptors or t in self._singleton_instances or t in self._scoped_instances
+
+    async def _batch_resolve(self, requests: list[tuple[str, type, dict, bool]],
+                             chain: tuple[ResolutionStep, ...]) -> dict:
         results = {}
         tasks = []
         task_names = []
 
-        for name, t, kwargs in requests:
+        for name, t, kwargs, is_optional in requests:
             singleton = self._lookup_singleton(t)
             if singleton is not None:
                 results[name] = singleton
+                continue
+
+            # we only resolve optional dependencies if they are explicitly registered
+            # or already known in the current scope
+            if is_optional and not self._is_known_type(t):
                 continue
 
             task_names.append(name)
@@ -332,8 +341,10 @@ class DependencyConfigurator(DependencyScope):
                 continue
 
             resolve_type = ann
+
             if generic_map:
-                if get_origin(ann) is type:
+                origin = get_origin(ann)
+                if origin is type:
                     arg = get_args(ann)[0]
                     if arg in generic_map:
                         final_kwargs[name] = generic_map[arg]
@@ -342,10 +353,14 @@ class DependencyConfigurator(DependencyScope):
                 if ann in generic_map:
                     resolve_type = generic_map[ann]
 
+            is_optional, resolve_type = is_type_optional(resolve_type)
+
             if is_builtin_type(resolve_type):
+                if is_optional:
+                    final_kwargs[name] = None
                 continue
 
-            requests.append((name, resolve_type, {}))
+            requests.append((name, resolve_type, {}, is_optional))
 
         resolved_deps = await self._batch_resolve(requests, chain)
         final_kwargs.update(resolved_deps)
@@ -369,11 +384,13 @@ class DependencyConfigurator(DependencyScope):
                                                 message=f'Parameter "{p_name}" in {name} is missing a type annotation, '
                                                         f'which is required for dependency resolution.')
 
+            is_optional, resolve_type = is_type_optional(ann)
+
             # noinspection PyProtectedMember
             dep_kwargs = p_param.default._kwargs
             merged_kwargs = {**dep_kwargs, **kwargs}
 
-            requests.append((p_name, ann, merged_kwargs))
+            requests.append((p_name, resolve_type, merged_kwargs, is_optional))
 
         resolved_deps = await self._batch_resolve(requests, chain)
         actual_kwargs.update(resolved_deps)

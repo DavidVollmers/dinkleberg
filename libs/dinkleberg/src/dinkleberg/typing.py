@@ -2,9 +2,24 @@ import abc
 import inspect
 from functools import lru_cache
 from inspect import Parameter, Signature
-from typing import Callable, get_origin, get_type_hints
+from types import UnionType
+from typing import Callable, get_origin, get_type_hints, Union, get_args
 
 from dinkleberg_abc import Dependency
+
+
+@lru_cache(maxsize=4096)
+def is_type_optional(t: type) -> tuple[bool, type]:
+    resolve_type = t
+    is_optional = False
+    origin = get_origin(resolve_type)
+    if origin is Union or origin is UnionType:
+        union_args = get_args(resolve_type)
+        if type(None) in union_args:
+            is_optional = True
+            resolve_type = next((a for a in union_args if a is not type(None)), resolve_type)
+
+    return is_optional, resolve_type
 
 
 @lru_cache(maxsize=4096)
