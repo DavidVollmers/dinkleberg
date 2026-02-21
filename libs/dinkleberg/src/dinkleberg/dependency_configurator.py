@@ -311,6 +311,7 @@ class DependencyConfigurator(DependencyScope):
             # we only resolve optional dependencies if they are explicitly registered
             # or already known in the current scope
             if is_optional and not self._is_known_type(t):
+                results[name] = None
                 continue
 
             task_names.append(name)

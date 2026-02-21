@@ -28,7 +28,7 @@ async def test_optional(di):
         pass
 
     class App:
-        def __init__(self, session: Optional[Session] = None):
+        def __init__(self, session: Optional[Session]):
             self.session = session
 
     instance = await di.resolve(App)
