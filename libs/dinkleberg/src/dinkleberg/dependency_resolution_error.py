@@ -11,7 +11,7 @@ class DependencyResolutionError(Exception):
     def _build_message(self) -> str:
         path = ' -> \n  '.join(str(step) for step in self._chain)
 
-        message = f'\n\nDependency Resolution Failed:'
+        message = '\n\nDependency Resolution Failed:'
         if self._message:
             message += f' {self._message}'
         if self._chain and len(self._chain) > 1:
