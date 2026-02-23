@@ -1,7 +1,6 @@
 import pytest
 
-from dinkleberg import DependencyConfigurator
-from dinkleberg_abc import DependencyScope
+from dinkleberg import DependencyConfigurator, DependencyScope
 
 
 class TestClass:

@@ -1,6 +1,6 @@
 import pytest
 
-from dinkleberg_abc import Dependency
+from dinkleberg import Dependency
 
 
 @pytest.mark.asyncio

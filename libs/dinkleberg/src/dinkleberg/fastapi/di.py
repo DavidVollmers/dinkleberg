@@ -1,9 +1,9 @@
 import logging
 
 from fastapi import Depends, HTTPException
-from dinkleberg_abc import DependencyScope
 
 from .request_scope import request_scope
+from ..dependency_scope import DependencyScope
 from ..dependency_resolution_error import DependencyResolutionError
 
 logger = logging.getLogger(__name__)

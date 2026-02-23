@@ -6,7 +6,8 @@ from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
-from dinkleberg_abc import DependencyScope, Dependency
+from .dependency_scope import DependencyScope
+from .dependency import Dependency
 from .dependency_resolution_error import DependencyResolutionError
 from .descriptor import Descriptor, Lifetime
 from .resolution_step import ResolutionStep

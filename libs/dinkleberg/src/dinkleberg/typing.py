@@ -5,7 +5,7 @@ from inspect import Parameter, Signature
 from types import UnionType
 from typing import Callable, get_origin, get_type_hints, Union, get_args
 
-from dinkleberg_abc import Dependency
+from .dependency import Dependency
 
 
 @lru_cache(maxsize=4096)
