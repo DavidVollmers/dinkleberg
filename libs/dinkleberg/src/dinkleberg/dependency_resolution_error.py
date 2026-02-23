@@ -8,6 +8,10 @@ class DependencyResolutionError(Exception):
         self._original_error = original_error
         super().__init__(self._build_message())
 
+    @property
+    def original_error(self) -> Exception | None:
+        return self._original_error
+
     def _build_message(self) -> str:
         path = ' -> \n  '.join(str(step) for step in self._chain)
 

@@ -1,10 +1,13 @@
+import logging
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, HTTPException
 from dinkleberg_abc import DependencyScope
 
 if TYPE_CHECKING:
-    from dinkleberg import DependencyConfigurator
+    from dinkleberg import DependencyConfigurator, DependencyResolutionError
+
+logger = logging.getLogger(__name__)
 
 
 # TODO support websockets
@@ -21,6 +24,13 @@ async def request_scope(request: Request):
 
 def di[T](t: type[T], **kwargs) -> T:
     async def dependable(scope: DependencyScope = Depends(request_scope)):
-        return await scope.resolve(t, **kwargs)
+        try:
+            return await scope.resolve(t, **kwargs)
+        except DependencyResolutionError as e:
+            if isinstance(e.original_error, HTTPException):
+                raise e.original_error
+
+            logger.exception('Error resolving dependency %s', t)
+            raise HTTPException(status_code=500)
 
     return Depends(dependable)
