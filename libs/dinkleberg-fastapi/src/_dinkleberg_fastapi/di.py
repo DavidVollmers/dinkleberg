@@ -24,6 +24,7 @@ async def request_scope(request: Request):
 
 def di[T](t: type[T], **kwargs) -> T:
     async def dependable(scope: DependencyScope = Depends(request_scope)):
+        from dinkleberg import DependencyResolutionError
         try:
             return await scope.resolve(t, **kwargs)
         except DependencyResolutionError as e:
