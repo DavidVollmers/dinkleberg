@@ -14,14 +14,14 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["dependency", "package-management", "automation"]
+keywords = ["dependency", "package-management", "automation", "fastapi"]
 dependencies = [
     "dinkleberg-abc>=1.1.1",
 ]
 
 [project.optional-dependencies]
 fastapi = [
-    "dinkleberg-fastapi>=1.1.0",
+    "fastapi>=0.128.0",
 ]
 
 [project.urls]

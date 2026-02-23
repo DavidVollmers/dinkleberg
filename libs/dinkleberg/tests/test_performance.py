@@ -4,8 +4,7 @@ import logging
 import pytest
 import time
 
-from dinkleberg import DependencyConfigurator
-from dinkleberg_abc import Dependency
+from dinkleberg import DependencyConfigurator, Dependency
 
 logger = logging.getLogger(__name__)
 

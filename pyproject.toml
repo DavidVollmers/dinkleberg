@@ -5,21 +5,13 @@ classifiers = [ "Private :: Do Not Upload" ]
 requires-python = ">=3.12"
 dependencies = [
  "dinkleberg",
- "dinkleberg-abc",
- "dinkleberg-fastapi",
  "fastapi-example",
 ]
 
 [tool.uv.workspace]
-members = [ "libs/dinkleberg", "libs/dinkleberg-abc", "libs/dinkleberg-fastapi", "examples/fastapi" ]
+members = [ "libs/dinkleberg", "examples/fastapi" ]
 
 [tool.uv.sources.dinkleberg]
-workspace = true
-
-[tool.uv.sources.dinkleberg-abc]
-workspace = true
-
-[tool.uv.sources.dinkleberg-fastapi]
 workspace = true
 
 [tool.uv.sources.fastapi-example]
