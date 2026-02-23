@@ -48,6 +48,7 @@ async def test_error(deps, api, client):
     assert response.status_code == 500
     assert response.json() == {'detail': 'Internal Server Error'}
 
+
 @pytest.mark.asyncio
 async def test_http_exception(deps, api, client):
     class TestDependency:

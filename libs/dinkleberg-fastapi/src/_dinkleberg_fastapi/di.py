@@ -5,7 +5,7 @@ from fastapi import Depends, Request, HTTPException
 from dinkleberg_abc import DependencyScope
 
 if TYPE_CHECKING:
-    from dinkleberg import DependencyConfigurator, DependencyResolutionError
+    from dinkleberg import DependencyConfigurator
 
 logger = logging.getLogger(__name__)
 
