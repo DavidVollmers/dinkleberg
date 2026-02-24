@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 
 from dinkleberg import DependencyConfigurator
@@ -20,7 +21,6 @@ def api(di):
     return app
 
 
-@pytest_asyncio.fixture
-async def client(api):
-    async with AsyncClient(transport=ASGITransport(app=api), base_url='http://test') as client:
-        yield client
+@pytest.fixture
+def client(api):
+    return TestClient(api)
