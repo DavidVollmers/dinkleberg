@@ -41,3 +41,22 @@ async def test_optional(di):
     instance_with_session = await di.resolve(App)
     assert isinstance(instance_with_session, App)
     assert instance_with_session.session is singleton_instance
+
+
+@pytest.mark.asyncio
+async def test_optional_with_error(di):
+    class Session:
+        pass
+
+    class App:
+        def __init__(self, session: Optional[Session]):
+            self.session = session
+
+    def session_callable():
+        raise RuntimeError('Session creation failed')
+
+    di.add_singleton(t=Session, callable=session_callable)
+
+    instance = await di.resolve(App)
+    assert isinstance(instance, App)
+    assert instance.session is None

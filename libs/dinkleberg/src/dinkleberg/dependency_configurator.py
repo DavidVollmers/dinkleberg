@@ -307,6 +307,7 @@ class DependencyConfigurator(DependencyScope):
         results = {}
         tasks = []
         task_names = []
+        task_optionals = []
 
         for name, t, kwargs, is_optional in requests:
             singleton = self._lookup_singleton(t)
@@ -321,11 +322,23 @@ class DependencyConfigurator(DependencyScope):
                 continue
 
             task_names.append(name)
+            task_optionals.append(is_optional)
             tasks.append(self._resolve(t, chain, **kwargs))
 
         if tasks:
-            resolved_values = await asyncio.gather(*tasks)
-            results.update(zip(task_names, resolved_values))
+            resolved_values = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for name, val, is_opt in zip(task_names, resolved_values, task_optionals):
+                if isinstance(val, BaseException):
+                    # Catch standard exceptions for optional dependencies and resolve as None
+                    if is_opt and isinstance(val, Exception):
+                        logger.warning(f'Optional dependency "{name}" could not be resolved: {val}. '
+                                       'Resolving as None.', exc_info=val)
+                        results[name] = None
+                    else:
+                        raise val
+                else:
+                    results[name] = val
 
         return results
 
