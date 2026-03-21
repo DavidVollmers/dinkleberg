@@ -1,7 +1,4 @@
-from typing import Optional
-
 from fastapi import Request
-from fastapi.datastructures import State
 from fastapi.websockets import WebSocket
 
 from ..dependency_configurator import DependencyConfigurator

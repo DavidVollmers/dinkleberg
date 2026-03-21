@@ -1,6 +1,5 @@
 from typing import Optional
 
-import pytest
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.websockets import WebSocket
 
