@@ -1,7 +1,11 @@
+import asyncio
+
 from fastapi import Request
 from fastapi.websockets import WebSocket
 
 from ..dependency_configurator import DependencyConfigurator
+
+_dinkleberg_cleanup_tasks = set()
 
 
 async def request_scope(request: Request = None, websocket: WebSocket = None):
@@ -21,4 +25,6 @@ async def request_scope(request: Request = None, websocket: WebSocket = None):
     try:
         yield scope
     finally:
-        await scope.close()
+        task = asyncio.create_task(scope.close())
+        _dinkleberg_cleanup_tasks.add(task)
+        task.add_done_callback(_dinkleberg_cleanup_tasks.discard)
