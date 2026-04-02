@@ -14,8 +14,10 @@ async def test_generator_lifecycle(di):
 
     async def db_generator() -> AsyncGenerator[Database, None]:
         events.append('setup')
-        yield Database()
-        events.append('teardown')
+        try:
+            yield Database()
+        finally:
+            events.append('teardown')
 
     di.add_scoped(t=Database, generator=db_generator)
 
@@ -48,13 +50,15 @@ async def test_generator_teardown_failure(di):
         pass
 
     async def bad_cleanup_gen() -> AsyncGenerator[BadCleanup, None]:
-        yield BadCleanup()
-        raise ValueError('Boom teardown')
+        try:
+            yield BadCleanup()
+        finally:
+            raise ValueError('Boom teardown')
 
     di.add_scoped(t=BadCleanup, generator=bad_cleanup_gen)
     await di.resolve(BadCleanup)
 
-    with pytest.raises(ExceptionGroup, match='Errors occurred during closing DependencyConfigurator') as group:
+    with pytest.raises(BaseExceptionGroup, match='Errors occurred during closing DependencyConfigurator') as group:
         await di.close()
 
     exceptions = group.value.exceptions
@@ -74,8 +78,10 @@ async def test_scope_independent_disposal(di):
     def create_gen(name):
         async def gen():
             events.append(f'{name}_start')
-            yield Resource(name)
-            events.append(f'{name}_stop')
+            try:
+                yield Resource(name)
+            finally:
+                events.append(f'{name}_stop')
 
         return gen
 
@@ -115,13 +121,17 @@ async def test_generator_lifo_disposal(di):
 
     async def low_gen() -> AsyncGenerator[LowLevel, None]:
         events.append('low_start')
-        yield LowLevel()
-        events.append('low_stop')
+        try:
+            yield LowLevel()
+        finally:
+            events.append('low_stop')
 
     async def high_gen(child: LowLevel) -> AsyncGenerator[HighLevel, None]:
         events.append('high_start')
-        yield HighLevel(child)
-        events.append('high_stop')
+        try:
+            yield HighLevel(child)
+        finally:
+            events.append('high_stop')
 
     di.add_scoped(t=LowLevel, generator=low_gen)
     di.add_scoped(t=HighLevel, generator=high_gen)

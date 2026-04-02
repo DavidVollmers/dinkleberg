@@ -46,11 +46,12 @@ class DependencyConfigurator(DependencyScope):
 
         for generator in reversed(self._active_generators):
             try:
-                await generator.__anext__()
-                raise RuntimeError('Generator did not stop after yielding a single value.')
+                await generator.aclose()
             except StopAsyncIteration:
                 pass
             except Exception as e:
+                exceptions.append(e)
+            except BaseException as e:
                 exceptions.append(e)
 
         for scope in self._scopes:
@@ -67,7 +68,7 @@ class DependencyConfigurator(DependencyScope):
         self._scopes.clear()
 
         if exceptions:
-            raise ExceptionGroup('Errors occurred during closing DependencyConfigurator', exceptions)
+            raise BaseExceptionGroup('Errors occurred during closing DependencyConfigurator', exceptions)
 
     def _add(self, lifetime: Lifetime, *, t: type = None, i: type = None,
              generator: Callable[..., AsyncGenerator] = None, callable: Callable = None, override: bool = False):

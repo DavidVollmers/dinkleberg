@@ -10,9 +10,11 @@ async def test_resolve_scoped_generator(di):
     close_counter = 0
 
     async def generator():
-        yield TestClass()
-        nonlocal close_counter
-        close_counter += 1
+        try:
+            yield TestClass()
+        finally:
+            nonlocal close_counter
+            close_counter += 1
 
     di.add_scoped(t=TestClass, generator=generator)
 
@@ -73,9 +75,11 @@ async def test_scope_context_manager(di):
     close_counter = 0
 
     async def generator():
-        yield TestClass()
-        nonlocal close_counter
-        close_counter += 1
+        try:
+            yield TestClass()
+        finally:
+            nonlocal close_counter
+            close_counter += 1
 
     di.add_scoped(t=TestClass, generator=generator)
 
@@ -96,9 +100,11 @@ async def test_singleton_in_scope(di):
     close_counter = 0
 
     async def generator():
-        yield TestClass()
-        nonlocal close_counter
-        close_counter += 1
+        try:
+            yield TestClass()
+        finally:
+            nonlocal close_counter
+            close_counter += 1
 
     di.add_singleton(t=TestClass, generator=generator)
 
