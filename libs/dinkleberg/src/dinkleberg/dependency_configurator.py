@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
 from .dependency_scope import DependencyScope
-from .dependency import Dependency
+from .dependency import _Dependency
 from .dependency_resolution_error import DependencyResolutionError
 from .descriptor import Descriptor, Lifetime
 from .resolution_step import ResolutionStep
@@ -388,6 +388,7 @@ class DependencyConfigurator(DependencyScope):
 
         return final_kwargs
 
+    # noinspection PyProtectedMember
     async def _resolve_kwargs(self, signature: Signature, name: str, args: tuple, kwargs: dict,
                               dep_params: Mapping[str, inspect.Parameter], chain: tuple[ResolutionStep, ...]) -> dict:
         bound_args = signature.bind_partial(*args, **kwargs)
@@ -401,13 +402,15 @@ class DependencyConfigurator(DependencyScope):
 
             ann = p_param.annotation
             if ann is inspect.Parameter.empty:
-                raise DependencyResolutionError(chain,
-                                                message=f'Parameter "{p_name}" in {name} is missing a type annotation, '
-                                                        f'which is required for dependency resolution.')
+                if p_param.default._t is not None:
+                    ann = p_param.default._t
+                else:
+                    raise DependencyResolutionError(chain,
+                                                    message=f'Parameter "{p_name}" in {name} is missing a type '
+                                                            f'annotation, which is required for dependency resolution.')
 
             is_optional, resolve_type = is_type_optional(ann)
 
-            # noinspection PyProtectedMember
             dep_kwargs = p_param.default._kwargs
             merged_kwargs = {**dep_kwargs, **kwargs}
 
@@ -424,13 +427,13 @@ class DependencyConfigurator(DependencyScope):
         dep_params = MappingProxyType({
             param_name: param
             for param_name, param in signature.parameters.items()
-            if isinstance(param.default, Dependency)
+            if isinstance(param.default, _Dependency)
         })
 
         if not dep_params:
             return func
 
-        if not asyncio.iscoroutinefunction(func):
+        if not inspect.iscoroutinefunction(func):
             raise NotImplementedError('Synchronous functions with Dependency() defaults are not supported.')
 
         @wraps(func)

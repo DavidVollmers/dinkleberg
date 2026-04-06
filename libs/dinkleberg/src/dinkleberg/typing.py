@@ -5,7 +5,7 @@ from inspect import Parameter, Signature
 from types import UnionType
 from typing import Callable, get_origin, get_type_hints, Union, get_args
 
-from .dependency import Dependency
+from .dependency import _Dependency
 
 
 @lru_cache(maxsize=4096)
@@ -67,7 +67,7 @@ def get_methods_to_wrap(cls: type) -> tuple[str, ...]:
 
             sig = get_signature(attr)
             for param in sig.parameters.values():
-                if isinstance(param.default, Dependency):
+                if isinstance(param.default, _Dependency):
                     methods_to_wrap.append(name)
                     break
         except (AttributeError, ValueError):

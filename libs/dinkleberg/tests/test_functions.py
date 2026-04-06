@@ -20,6 +20,22 @@ async def test_resolve_function(di):
 
 
 @pytest.mark.asyncio
+async def test_resolve_function_without_annotation(di):
+    class Test:
+        def get_message(self):
+            return 'Hello, World!'
+
+    async def test(t=Dependency(Test)):
+        return t.get_message()
+
+    f = await di.resolve(test)
+
+    result = await f()
+
+    assert result == 'Hello, World!'
+
+
+@pytest.mark.asyncio
 async def test_resolve_function_with_kwargs(di):
     class Test:
         def __init__(self, name):
