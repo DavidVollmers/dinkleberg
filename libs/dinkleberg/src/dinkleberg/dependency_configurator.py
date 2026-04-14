@@ -6,6 +6,7 @@ from inspect import Signature
 from types import MappingProxyType
 from typing import AsyncGenerator, Callable, overload, get_type_hints, Mapping, get_origin, get_args
 
+from .dependency_inspector import DependencyInspector
 from .dependency_scope import DependencyScope
 from .dependency import _Dependency
 from .dependency_resolution_error import DependencyResolutionError
@@ -29,6 +30,11 @@ class DependencyConfigurator(DependencyScope):
         self._active_generators = []
         self._scopes = []
         self._closed = False
+        self._inspector = DependencyInspector(self)
+
+    @property
+    def inspector(self) -> DependencyInspector:
+        return self._inspector
 
     def configure[T](self, t: type[T], configurator: Callable[[T], T | None]) -> None:
         self._raise_if_closed()
