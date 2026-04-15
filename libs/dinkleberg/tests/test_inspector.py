@@ -113,3 +113,24 @@ async def test_inspector_unregistered_type_fallback(di):
     # Even if types aren't registered, the inspector should fallback
     # to inspecting the target class directly
     assert di.inspector.has_dependency(UserService, Database) is True
+
+
+@pytest.mark.asyncio
+async def test_inspector_specific_method(di):
+    di.add_transient(t=Database)
+
+    class WebController:
+        def handle(self, db: Database = Dependency()):
+            pass
+
+        def process(self):  # No dependencies
+            pass
+
+    # Inspecting the class finds the dependency (via scanning all methods)
+    assert di.inspector.has_dependency(WebController, Database) is True
+
+    # Inspecting the specific method finds it
+    assert di.inspector.has_dependency(WebController.handle, Database) is True
+
+    # Inspecting the unrelated method returns False
+    assert di.inspector.has_dependency(WebController.process, Database) is False
