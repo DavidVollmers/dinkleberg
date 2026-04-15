@@ -39,23 +39,19 @@ class DependencyInspector:
         deps = set()
 
         if inspect.isroutine(t):
-            # noinspection PyBroadException
-            try:
-                sig = get_signature(t)
-                for param in sig.parameters.values():
-                    if isinstance(param.default, _Dependency):
-                        ann = param.annotation
-                        if ann is inspect.Parameter.empty and param.default._t is not None:
-                            ann = param.default._t
+            sig = get_signature(t)
+            for param in sig.parameters.values():
+                if isinstance(param.default, _Dependency):
+                    ann = param.annotation
+                    if ann is inspect.Parameter.empty and param.default._t is not None:
+                        ann = param.default._t
 
-                        if ann is not inspect.Parameter.empty:
-                            _, resolve_type = is_type_optional(ann)
-                            if isinstance(resolve_type, str):
-                                resolve_type = self._resolve_string_reference(resolve_type) or resolve_type
+                    if ann is not inspect.Parameter.empty:
+                        _, resolve_type = is_type_optional(ann)
+                        if isinstance(resolve_type, str):
+                            resolve_type = self._resolve_string_reference(resolve_type) or resolve_type
 
-                            deps.add(resolve_type)
-            except Exception:
-                pass
+                        deps.add(resolve_type)
             return deps
 
         origin = get_origin(t)
@@ -78,52 +74,44 @@ class DependencyInspector:
 
         target_to_inspect = factory.__init__ if inspect.isclass(factory) else factory
 
-        # noinspection PyBroadException
-        try:
-            params = get_static_params(target_to_inspect)
-            for param in params:
-                if inspect.isclass(factory) and param.name == 'self':
-                    continue
+        params = get_static_params(target_to_inspect)
+        for param in params:
+            if inspect.isclass(factory) and param.name == 'self':
+                continue
 
-                if param.annotation is not inspect.Parameter.empty:
-                    _, resolve_type = is_type_optional(param.annotation)
+            if param.annotation is not inspect.Parameter.empty:
+                _, resolve_type = is_type_optional(param.annotation)
 
-                    if isinstance(resolve_type, str):
-                        for registered_type in self._deps._descriptors.keys():
-                            if getattr(registered_type, '__name__', '') == resolve_type:
-                                resolve_type = registered_type
-                                break
+                if isinstance(resolve_type, str):
+                    for registered_type in self._deps._descriptors.keys():
+                        if getattr(registered_type, '__name__', '') == resolve_type:
+                            resolve_type = registered_type
+                            break
 
-                    deps.add(resolve_type)
-        except Exception:
-            pass
+                deps.add(resolve_type)
 
         actual_type = origin if is_origin_class else t
         if inspect.isclass(actual_type):
-            # noinspection PyBroadException
-            try:
-                for name in get_methods_to_wrap(actual_type):
-                    method = getattr(actual_type, name)
-                    sig = get_signature(method)
+            for name in get_methods_to_wrap(actual_type):
+                method = getattr(actual_type, name)
+                sig = get_signature(method)
 
-                    for param in sig.parameters.values():
-                        if isinstance(param.default, _Dependency):
-                            ann = param.annotation
-                            if ann is inspect.Parameter.empty and param.default._t is not None:
-                                ann = param.default._t
+                for param in sig.parameters.values():
+                    if isinstance(param.default, _Dependency):
+                        ann = param.annotation
+                        if ann is inspect.Parameter.empty and param.default._t is not None:
+                            ann = param.default._t
 
-                            if ann is not inspect.Parameter.empty:
-                                _, resolve_type = is_type_optional(ann)
+                        if ann is not inspect.Parameter.empty:
+                            _, resolve_type = is_type_optional(ann)
 
-                                if isinstance(resolve_type, str):
-                                    for registered_type in self._deps._descriptors.keys():
-                                        if getattr(registered_type, '__name__', '') == resolve_type:
-                                            resolve_type = registered_type
-                                            break
+                            if isinstance(resolve_type, str):
+                                for registered_type in self._deps._descriptors.keys():
+                                    if getattr(registered_type, '__name__', '') == resolve_type:
+                                        resolve_type = registered_type
+                                        break
 
-                                deps.add(resolve_type)
-            except Exception:
-                pass
+                            deps.add(resolve_type)
 
         return deps
 
