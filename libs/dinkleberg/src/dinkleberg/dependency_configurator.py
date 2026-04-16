@@ -30,11 +30,17 @@ class DependencyConfigurator(DependencyScope):
         self._active_generators = []
         self._scopes = []
         self._closed = False
+        self._singleton_locks: dict[type, asyncio.Lock] = {}
         self._inspector = DependencyInspector(self)
 
     @property
     def inspector(self) -> DependencyInspector:
         return self._inspector
+
+    def _get_singleton_lock(self, t: type) -> asyncio.Lock:
+        if t not in self._singleton_locks:
+            self._singleton_locks[t] = asyncio.Lock()
+        return self._singleton_locks[t]
 
     def configure[T](self, t: type[T], configurator: Callable[[T], T | None]) -> None:
         self._raise_if_closed()
@@ -69,6 +75,7 @@ class DependencyConfigurator(DependencyScope):
         self._singleton_instances.clear()
         self._active_generators.clear()
         self._scoped_instances.clear()
+        self._singleton_locks.clear()
         self._configurators.clear()
         self._descriptors.clear()
         self._scopes.clear()
@@ -161,7 +168,6 @@ class DependencyConfigurator(DependencyScope):
     async def resolve[T](self, t: type[T] | Callable, **kwargs) -> T:
         return await self._resolve(t, chain=(), **kwargs)
 
-    # TODO singleton race condition prevention (async.Lock)
     async def _resolve[T](self, t: type[T] | Callable, chain: tuple[ResolutionStep, ...], **kwargs) -> T:
         self._raise_if_closed()
 
@@ -197,89 +203,110 @@ class DependencyConfigurator(DependencyScope):
                 # noinspection PyTypeChecker
                 descriptor = self._descriptors.get(origin)
 
-            if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
+            lifetime = descriptor['lifetime'] if descriptor else 'transient'
 
-                generic_map = None
-                if descriptor is None:
-                    if is_builtin_type(t):
-                        raise DependencyResolutionError(current_chain,
-                                                        message=f'Cannot resolve built-in type {t} '
-                                                                'without explicit registration.')
+            if lifetime == 'singleton' and self._parent:
+                return await self._parent._resolve(t, chain, **kwargs)
 
-                    if origin is not None:
-                        raise DependencyResolutionError(current_chain,
-                                                        message=f'Cannot resolve generic type {t} '
-                                                                'without explicit registration.')
+            lock = None
+            lock_acquired = False
 
-                    if is_abstract(t):
-                        raise DependencyResolutionError(current_chain,
-                                                        message=f'Cannot resolve abstract class {t} '
-                                                                'without explicit registration.')
+            if lifetime == 'singleton':
+                if t not in self._singleton_locks:
+                    self._singleton_locks[t] = asyncio.Lock()
 
-                    factory = t
-                elif descriptor['implementation'] is not None:
-                    instance = await self._resolve(descriptor['implementation'], current_chain, **kwargs)
-                    return self._return_instance(t, descriptor['lifetime'], instance, current_chain)
-                elif is_origin_class:
-                    factory = origin
+                lock = self._singleton_locks[t]
+                await lock.acquire()
+                lock_acquired = True
 
-                    type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
-                    t_args = get_args(t)
-                    if type_params and t_args:
-                        generic_map = dict(zip(type_params, t_args))
-                else:
-                    factory = t
+                singleton = self._lookup_singleton(t)
+                if singleton is not None:
+                    lock.release()
+                    return singleton
 
-                is_generator = False
-                lifetime = descriptor['lifetime'] if descriptor else 'transient'
-                factory_kwargs = await self._resolve_factory_kwargs(factory.__init__, kwargs, generic_map,
-                                                                    current_chain)
-            else:
-                lifetime = descriptor['lifetime']
-                if lifetime == 'singleton' and self._parent:
-                    # we need to resolve singleton from the root scope
-                    return await self._parent._resolve(t, chain, **kwargs)
+            try:
+                if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
+                    generic_map = None
+                    if descriptor is None:
+                        if is_builtin_type(t):
+                            raise DependencyResolutionError(current_chain,
+                                                            message=f'Cannot resolve built-in type {t} '
+                                                                    'without explicit registration.')
 
-                is_generator = descriptor['generator'] is not None
-                factory = descriptor['generator'] or descriptor['callable']
+                        if origin is not None:
+                            raise DependencyResolutionError(current_chain,
+                                                            message=f'Cannot resolve generic type {t} '
+                                                                    'without explicit registration.')
 
-                generic_map = None
-                if is_origin_class:
-                    generic_map = self._infer_return_generics(factory, t)
+                        if is_abstract(t):
+                            raise DependencyResolutionError(current_chain,
+                                                            message=f'Cannot resolve abstract class {t} '
+                                                                    'without explicit registration.')
 
-                factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map, current_chain)
+                        factory = t
+                    elif descriptor['implementation'] is not None:
+                        instance = await self._resolve(descriptor['implementation'], current_chain, **kwargs)
+                        return self._return_instance(t, lifetime, instance, current_chain)
+                    elif is_origin_class:
+                        factory = origin
 
-            if is_generator:
-                # noinspection PyCallingNonCallable
-                generator = factory(**factory_kwargs)
-                try:
-                    instance = await generator.__anext__()
-                except StopAsyncIteration:
-                    raise DependencyResolutionError(current_chain, message=f'Generator {t} did not yield any value.')
-
-                self._active_generators.append(generator)
-            elif asyncio.iscoroutinefunction(factory):
-                # noinspection PyCallingNonCallable
-                instance = await factory(**factory_kwargs)
-            else:
-                # noinspection PyCallingNonCallable
-                instance = factory(**factory_kwargs)
-
-            if isinstance(instance, AsyncGenerator):
-                try:
-                    if is_generator:
-                        raise DependencyResolutionError(current_chain,
-                                                        message=f'Generator {t} yielded another generator. '
-                                                                'Nested generators are not supported.')
+                        type_params = getattr(origin, '__type_params__', getattr(origin, '__parameters__', None))
+                        t_args = get_args(t)
+                        if type_params and t_args:
+                            generic_map = dict(zip(type_params, t_args))
                     else:
-                        raise DependencyResolutionError(current_chain,
-                                                        message=f'Callable {t} returned a generator. '
-                                                                'This is most likely due to an '
-                                                                'invalid dependency registration.')
-                finally:
-                    await instance.aclose()
+                        factory = t
 
-            return self._return_instance(t, lifetime, instance, current_chain)
+                    is_generator = False
+                    factory_kwargs = await self._resolve_factory_kwargs(factory.__init__, kwargs, generic_map,
+                                                                        current_chain)
+                else:
+                    is_generator = descriptor['generator'] is not None
+                    factory = descriptor['generator'] or descriptor['callable']
+
+                    generic_map = None
+                    if is_origin_class:
+                        generic_map = self._infer_return_generics(factory, t)
+
+                    factory_kwargs = await self._resolve_factory_kwargs(factory, kwargs, generic_map, current_chain)
+
+                if is_generator:
+                    # noinspection PyCallingNonCallable
+                    generator = factory(**factory_kwargs)
+                    try:
+                        instance = await generator.__anext__()
+                    except StopAsyncIteration:
+                        raise DependencyResolutionError(current_chain,
+                                                        message=f'Generator {t} did not yield any value.')
+
+                    self._active_generators.append(generator)
+                elif inspect.iscoroutinefunction(factory):
+                    # noinspection PyCallingNonCallable
+                    instance = await factory(**factory_kwargs)
+                else:
+                    # noinspection PyCallingNonCallable
+                    instance = factory(**factory_kwargs)
+
+                if isinstance(instance, AsyncGenerator):
+                    try:
+                        if is_generator:
+                            raise DependencyResolutionError(current_chain,
+                                                            message=f'Generator {t} yielded another generator. '
+                                                                    'Nested generators are not supported.')
+                        else:
+                            raise DependencyResolutionError(current_chain,
+                                                            message=f'Callable {t} returned a generator. '
+                                                                    'This is most likely due to an '
+                                                                    'invalid dependency registration.')
+                    finally:
+                        await instance.aclose()
+
+                return self._return_instance(t, lifetime, instance, current_chain)
+
+            finally:
+                if lock_acquired:
+                    lock.release()
+
         except DependencyResolutionError:
             raise
         except RecursionError:
