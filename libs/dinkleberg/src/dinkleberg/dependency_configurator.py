@@ -30,17 +30,17 @@ class DependencyConfigurator(DependencyScope):
         self._active_generators = []
         self._scopes = []
         self._closed = False
-        self._singleton_locks: dict[type, asyncio.Lock] = {}
+        self._type_locks: dict[type, asyncio.Lock] = {}
         self._inspector = DependencyInspector(self)
 
     @property
     def inspector(self) -> DependencyInspector:
         return self._inspector
 
-    def _get_singleton_lock(self, t: type) -> asyncio.Lock:
-        if t not in self._singleton_locks:
-            self._singleton_locks[t] = asyncio.Lock()
-        return self._singleton_locks[t]
+    def _get_type_lock(self, t: type) -> asyncio.Lock:
+        if t not in self._type_locks:
+            self._type_locks[t] = asyncio.Lock()
+        return self._type_locks[t]
 
     def configure[T](self, t: type[T], configurator: Callable[[T], T | None]) -> None:
         self._raise_if_closed()
@@ -75,9 +75,9 @@ class DependencyConfigurator(DependencyScope):
         self._singleton_instances.clear()
         self._active_generators.clear()
         self._scoped_instances.clear()
-        self._singleton_locks.clear()
         self._configurators.clear()
         self._descriptors.clear()
+        self._type_locks.clear()
         self._scopes.clear()
 
         if exceptions:
@@ -211,19 +211,23 @@ class DependencyConfigurator(DependencyScope):
             lock = None
             lock_acquired = False
 
-            if lifetime == 'singleton':
-                if t not in self._singleton_locks:
-                    self._singleton_locks[t] = asyncio.Lock()
+            if lifetime != 'transient':
+                if t not in self._type_locks:
+                    self._type_locks[t] = asyncio.Lock()
 
-                lock = self._singleton_locks[t]
+                lock = self._type_locks[t]
                 await lock.acquire()
                 lock_acquired = True
 
-                singleton = self._lookup_singleton(t)
-                if singleton is not None:
-                    lock.release()
-                    return singleton
-
+                if lifetime == 'singleton':
+                    singleton = self._lookup_singleton(t)
+                    if singleton is not None:
+                        lock.release()
+                        return singleton
+                else:
+                    if t in self._scoped_instances:
+                        lock.release()
+                        return self._configure_instance(t, self._scoped_instances[t])
             try:
                 if descriptor is None or descriptor['generator'] is None and descriptor['callable'] is None:
                     generic_map = None
