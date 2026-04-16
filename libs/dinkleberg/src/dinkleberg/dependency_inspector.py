@@ -74,21 +74,22 @@ class DependencyInspector:
 
         target_to_inspect = factory.__init__ if inspect.isclass(factory) else factory
 
-        params = get_static_params(target_to_inspect)
-        for param in params:
-            if inspect.isclass(factory) and param.name == 'self':
-                continue
+        if callable(target_to_inspect):
+            params = get_static_params(target_to_inspect)
+            for param in params:
+                if inspect.isclass(factory) and param.name == 'self':
+                    continue
 
-            if param.annotation is not inspect.Parameter.empty:
-                _, resolve_type = is_type_optional(param.annotation)
+                if param.annotation is not inspect.Parameter.empty:
+                    _, resolve_type = is_type_optional(param.annotation)
 
-                if isinstance(resolve_type, str):
-                    for registered_type in self._deps._descriptors.keys():
-                        if getattr(registered_type, '__name__', '') == resolve_type:
-                            resolve_type = registered_type
-                            break
+                    if isinstance(resolve_type, str):
+                        for registered_type in self._deps._descriptors.keys():
+                            if getattr(registered_type, '__name__', '') == resolve_type:
+                                resolve_type = registered_type
+                                break
 
-                deps.add(resolve_type)
+                    deps.add(resolve_type)
 
         actual_type = origin if is_origin_class else t
         if inspect.isclass(actual_type):

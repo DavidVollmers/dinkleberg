@@ -1,5 +1,5 @@
 import pytest
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Union, Optional
 
 # Assuming your Dependency marker is imported like this
 from dinkleberg.dependency import Dependency
@@ -134,3 +134,49 @@ async def test_inspector_specific_method(di):
 
     # Inspecting the unrelated method returns False
     assert di.inspector.has_dependency(WebController.process, Database) is False
+
+
+HeaderTypes = Union[str, dict]
+
+
+class ConfigTypes:
+    pass
+
+
+class FailingService:
+    # Simulates the bug where Union types crashed the static param inspector
+    def __init__(self, headers: HeaderTypes | None, config: Optional[ConfigTypes]):
+        pass
+
+
+class ForwardService:
+    # Simulates string forward references
+    def __init__(self, db: 'Database'):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_inspector_ignores_non_callable_types(di):
+    # This should safely evaluate to False without raising a TypeError
+    # from the `HeaderTypes | None` union.
+    assert di.inspector.has_dependency(FailingService, Database) is False
+
+    # It should still correctly extract the inner type of an Optional
+    assert di.inspector.has_dependency(FailingService, ConfigTypes) is True
+
+
+@pytest.mark.asyncio
+async def test_inspector_string_forward_references(di):
+    di.add_transient(t=Database)
+    di.add_transient(t=ForwardService)
+
+    # The inspector should resolve the string 'Database'
+    # to the registered Database type
+    assert di.inspector.has_dependency(ForwardService, Database) is True
+
+
+@pytest.mark.asyncio
+async def test_inspector_unregistered_string_forward_references(di):
+    # If the string reference isn't registered yet, it shouldn't crash,
+    # but it also won't know that 'Database' == Database class.
+    assert di.inspector.has_dependency(ForwardService, Database) is False
